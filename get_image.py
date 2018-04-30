@@ -1,3 +1,4 @@
+#!~/virtualenv/Pillow/bin python
 import urllib.request
 from time import sleep
 from PIL import Image
