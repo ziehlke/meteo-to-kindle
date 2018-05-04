@@ -1,6 +1,8 @@
 #!~/virtualenv/Pillow/bin python
 import urllib.request
 from time import sleep
+import subprocess
+import shlex
 from PIL import Image
 
 
@@ -35,7 +37,9 @@ def adjustSize(img):
     ratio = (toWidth / float(img.size[0]))
     newHeight = int((float(img.size[1]) * float(ratio)))
     img = img.resize((toWidth, newHeight), Image.ANTIALIAS)
-    return img
+    template = Image.open("template.png")
+    template.paste(img)
+    return template
 
 
 if __name__ == '__main__':
@@ -58,6 +62,10 @@ if __name__ == '__main__':
 
     img = crop(img)
     img = color(img)
-    img = img.convert('L')
+    #img = img.convert('L')
     img = adjustSize(img)
-    img.save("weather-script-output.png")
+    img.save("weather-script-output.png", bits=8)
+
+    bash = shlex.split(
+        'pngcrush -c 0 -ow "/mnt/OpenShare/weather/weather-script-output.png"')
+    subprocess.Popen(bash, stdout=subprocess.PIPE)
