@@ -1,5 +1,4 @@
-#!~/virtualenv/Pillow/bin python
-import urllib.request
+import urllib
 from time import sleep
 import subprocess
 import shlex
@@ -7,7 +6,7 @@ from PIL import Image
 
 
 def download(url):
-    urllib.request.urlretrieve(
+    urllib.urlretrieve(
         url, "/mnt/OpenShare/weather/weather-script-output.png")
     return None
 
