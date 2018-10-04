@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import urllib
 from time import sleep
 import subprocess
@@ -20,7 +21,7 @@ def crop(img):
     return img
 
 
-def color(img):
+def removeLogo(img):
     pixdata = img.load()
     for y in range(img.size[1]):
         for x in range(img.size[0]):
@@ -36,7 +37,7 @@ def adjustSize(img):
     ratio = (toWidth / float(img.size[0]))
     newHeight = int((float(img.size[1]) * float(ratio)))
     img = img.resize((toWidth, newHeight), Image.ANTIALIAS)
-    template = Image.open("template.png")
+    template = Image.open("/mnt/OpenShare/weather/template.png")
     template.paste(img)
     return template
 
@@ -48,23 +49,27 @@ if __name__ == '__main__':
     download(url)
     while True:
         try:
-            img = Image.open("weather-script-output.png")
+            img = Image.open("/mnt/OpenShare/weather/weather-script-output.png")
             img = img.convert("RGB")
         except (SyntaxError, OSError):
             print("\nDownload failed... retry in 15 seconds.\n")
             sleep(15)
             download(url)
-            img = Image.open("weather-script-output.png")
+            img = Image.open("/mnt/OpenShare/weather/weather-script-output.png")
             img = img.convert("RGB")
             continue
         break
 
     img = crop(img)
-    img = color(img)
-    #img = img.convert('L')
+    img = removeLogo(img)
     img = adjustSize(img)
-    img.save("weather-script-output.png", bits=8)
+    img.save("/mnt/OpenShare/weather/weather-script-output.png", bits=8)
 
-    bash = shlex.split(
-        'pngcrush -c 0 -ow "/mnt/OpenShare/weather/weather-script-output.png"')
-    subprocess.Popen(bash, stdout=subprocess.PIPE)
+    
+    bash = shlex.split('/usr/bin/pngcrush -c 0 -ow "/mnt/OpenShare/weather/weather-script-output.png"')
+    subprocess.call(bash, shell=True)
+
+
+
+    # bash = ('/usr/bin/pngcrush', '-c', '0', '-ow', "/mnt/OpenShare/weather/weather-script-output.png")
+    # subprocess.Popen(bash, stdout=subprocess.PIPE)
