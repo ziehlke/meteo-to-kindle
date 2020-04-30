@@ -5,6 +5,8 @@ from urllib.error import ContentTooShortError
 
 from PIL import Image
 
+from airly import Airly
+
 
 def crop(image):
     img_down = image.crop((0, 524, 585, 635))
@@ -44,6 +46,8 @@ if __name__ == '__main__':
           f"col={Krakow[1]}&" \
           f"lang=pl"
     output = "/mnt/OpenShare/weather/weather-script-output.png"
+    airly = Airly()
+    airly.fill_template()
 
     while True:
         try:
