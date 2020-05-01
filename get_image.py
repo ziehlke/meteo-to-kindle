@@ -12,7 +12,12 @@ def crop(image):
     img_down = image.crop((0, 524, 585, 635))
     img_down.load()
     image.paste(img_down, (0, 400, 585, 511))
-    image = image.crop((35, 0, 540, 511))
+
+    img_down = image.crop((0, 312, 585, 511))
+    img_down.load()
+    image.paste(img_down, (0, 226, 585, 425))
+
+    image = image.crop((35, 0, 540, 425))
     image.load()
     return image
 
@@ -38,6 +43,15 @@ def adjustSize(image):
     return template
 
 
+def pasteCaqi(image):
+    caqi = Image.open('/mnt/OpenShare/weather/caqi.png')
+    width, height = caqi.size
+    caqi.load()
+    image.paste(caqi, (0, 500, width, 500 + height))
+    image.load()
+    return image
+
+
 if __name__ == '__main__':
     #  Gdansk = [346, 210]
     Krakow = [466, 232]
@@ -48,6 +62,7 @@ if __name__ == '__main__':
     output = "/mnt/OpenShare/weather/weather-script-output.png"
     airly = Airly()
     airly.fill_template()
+    airly.plot_caqi_history()
 
     while True:
         try:
@@ -63,6 +78,7 @@ if __name__ == '__main__':
     img = crop(img)
     img = removeLogo(img)
     img = adjustSize(img)
+    img = pasteCaqi(img)
     img.save(output, bits=8)
 
     subprocess.run(['pngcrush', '-c', '0', output])
