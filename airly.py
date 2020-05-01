@@ -31,18 +31,17 @@ class Airly:
         times = [history['fromDateTime'].rsplit('T')[1][0:2] for history in self.data['history']]
         y_pos = np.arange(len(caqis))
 
-        plt.figure(figsize=(6, 2))
+        plt.figure(figsize=(6.5, 1))
         plt.bar(y_pos, caqis, color=colors, width=0.94)
         plt.xticks(y_pos, times)
-        plt.show()
-        # plt.savefig('foo.png', bbox_inches='tight')
+        plt.savefig('/mnt/OpenShare/weather/caqi.png', bbox_inches='tight')
 
     def fill_template(self):
         # load fonts
         open_moji = ImageFont.truetype('/home/pi/weather/Manrope/OpenMoji-Black.ttf', 60)
         manrope_extra_bold = ImageFont.truetype('/home/pi/weather/Manrope/Manrope-ExtraBold.ttf', 40)
         manrope_bold_small = ImageFont.truetype('/home/pi/weather/Manrope/Manrope-Bold.ttf', 30)
-        manrope_regular_small = ImageFont.truetype('/home/pi/weather/Manrope/Manrope-Regular.ttf', 10)
+        manrope_regular_small = ImageFont.truetype('/home/pi/weather/Manrope/Manrope-Regular.ttf', 16)
 
         current_caqi = self.data['current']['indexes'][0]['value']
         emoji_index = np.digitize(current_caqi, self.CAQI_BINS)
@@ -56,9 +55,9 @@ class Airly:
         draw.text((350, 650), str(round(self.data['current']['values'][1]['value'])), fill="black", font=manrope_extra_bold)
         draw.text((505, 650), str(round(self.data['current']['values'][0]['value'])), fill="black", font=manrope_extra_bold)
 
-        draw.text((195, 696), f"{round(100 * self.data['current']['values'][2]['value'] / 50.0)}%",
+        draw.text((195, 688), f"{round(100 * self.data['current']['values'][2]['value'] / 50.0)}%",
                   fill="gray", font=manrope_bold_small)
-        draw.text((350, 696), f"{round(100 * self.data['current']['values'][1]['value'] / 25.0)}%",
+        draw.text((350, 688), f"{round(100 * self.data['current']['values'][1]['value'] / 25.0)}%",
                   fill="gray", font=manrope_bold_small)
 
         draw.text((350, 720), str(round(self.data['current']['values'][5]['value'])), fill="black", font=manrope_extra_bold)
