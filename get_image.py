@@ -9,15 +9,15 @@ from airly import Airly
 
 
 def crop(image):
-    img_down = image.crop((0, 524, 585, 635))
+    img_down = image.crop((0, 524, image.size[0], 635))
     img_down.load()
-    image.paste(img_down, (0, 400, 585, 511))
+    image.paste(img_down, (0, 400, image.size[0], 511))
 
-    img_down = image.crop((0, 312, 585, 511))
+    img_down = image.crop((0, 312, image.size[0], 511))
     img_down.load()
-    image.paste(img_down, (0, 226, 585, 425))
+    image.paste(img_down, (0, 226, image.size[0], 425))
 
-    image = image.crop((35, 0, 540, 425))
+    image = image.crop((35, 0, image.size[0] - 40, 425))
     image.load()
     return image
 
