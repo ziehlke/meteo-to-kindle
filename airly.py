@@ -31,7 +31,7 @@ class Airly:
         times = [history['fromDateTime'].rsplit('T')[1][0:2] for history in self.data['history']]
         y_pos = np.arange(len(caqis))
 
-        plt.figure(figsize=(6.5, 1))
+        plt.figure(figsize=(7, 1))
         plt.bar(y_pos, caqis, color=colors, width=0.94)
         plt.xticks(y_pos, times)
         plt.savefig('/mnt/OpenShare/weather/caqi.png', bbox_inches='tight')
