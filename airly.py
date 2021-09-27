@@ -26,7 +26,7 @@ class Airly:
         self.data = json.loads(requests.get(self.url, headers).text)
 
     def plot_caqi_history(self):
-        caqis = [history['indexes'][0]['value'] for history in self.data['history']]
+        caqis = [history['indexes'][0]['value'] if history['indexes'][0]['value'] else 0 for history in self.data['history']]
         colors = [history['indexes'][0]['color'] for history in self.data['history']]
         times = [history['fromDateTime'].rsplit('T')[1][0:2] for history in self.data['history']]
         y_pos = np.arange(len(caqis))
