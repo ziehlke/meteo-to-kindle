@@ -1,8 +1,11 @@
+import os
 import subprocess
+import sys
 import urllib.request
 from time import sleep
 from urllib.error import ContentTooShortError
 
+import requests
 from PIL import Image
 
 from airly import Airly
@@ -53,7 +56,13 @@ def pasteCaqi(image):
 
 
 if __name__ == '__main__':
-    #  Gdansk = [346, 210]
+    if not os.path.exists('/mnt/OpenShare/weather/'):
+        with open('/home/pi/weather/.bot_token', 'r') as token_file:
+            TOKEN, CHAT_ID = token_file.readline().split('|')
+            send_text = f'https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text=OpenShareDOWN'
+            response = requests.get(send_text)
+            sys.exit(0)
+
     Krakow = [466, 232]
     url = f"http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&" \
           f"row={Krakow[0]}&" \
