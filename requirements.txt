@@ -3,12 +3,12 @@ chardet==3.0.4
 cycler==0.10.0
 idna==2.9
 kiwisolver==1.2.0
-matplotlib==3.2.1
+matplotlib>=3.4.3
 numpy==1.18.3
-Pillow==7.1.1
+Pillow>=8.3.2
 pkg-resources==0.0.0
 pyparsing==2.4.7
 python-dateutil==2.8.1
-requests==2.23.0
+requests>=2.26.0
 six==1.14.0
-urllib3==1.25.9
+urllib3>=1.26.5

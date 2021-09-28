@@ -38,14 +38,13 @@ class Airly:
 
     def fill_template(self):
         # load fonts
-        open_moji = ImageFont.truetype('/home/pi/weather/Manrope/OpenMoji-Black.ttf', 60)
-        manrope_extra_bold = ImageFont.truetype('/home/pi/weather/Manrope/Manrope-ExtraBold.ttf', 40)
-        manrope_bold_small = ImageFont.truetype('/home/pi/weather/Manrope/Manrope-Bold.ttf', 30)
-        manrope_regular_small = ImageFont.truetype('/home/pi/weather/Manrope/Manrope-Regular.ttf', 16)
-
+        open_moji = ImageFont.truetype('/home/c2/meteo-to-kindle/Manrope/OpenMoji-Black.ttf', 60)
+        manrope_extra_bold = ImageFont.truetype('/home/c2/meteo-to-kindle/Manrope/Manrope-ExtraBold.ttf', 40)
+        manrope_bold_small = ImageFont.truetype('/home/c2/meteo-to-kindle/Manrope/Manrope-Bold.ttf', 30)
+        manrope_regular_small = ImageFont.truetype('/home/c2/meteo-to-kindle/Manrope/Manrope-Regular.ttf', 16)
         current_caqi = self.data['current']['indexes'][0]['value']
         emoji_index = np.digitize(current_caqi, self.CAQI_BINS)
-
+        
         image = Image.open('/mnt/OpenShare/weather/master_template.png')
         draw = ImageDraw.Draw(image)
         draw.text((9, 544), self.EMOJIS[emoji_index], fill="black", font=open_moji)

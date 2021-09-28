@@ -57,7 +57,7 @@ def pasteCaqi(image):
 
 if __name__ == '__main__':
     if not os.path.exists('/mnt/OpenShare/weather/'):
-        with open('/home/pi/weather/.bot_token', 'r') as token_file:
+        with open(f'{os.path.dirname(os.path.realpath(__file__))}/.bot_token', 'r') as token_file:
             TOKEN, CHAT_ID = token_file.readline().split('|')
             send_text = f'https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text=OpenShareDOWN'
             response = requests.get(send_text)
