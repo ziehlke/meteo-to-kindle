@@ -4,7 +4,7 @@ cycler==0.10.0
 idna==2.9
 kiwisolver==1.2.0
 matplotlib>=3.4.3
-numpy~> 1.19
+numpy~>1.19
 Pillow>=8.3.2
 pkg-resources==0.0.0
 pyparsing==2.4.7
