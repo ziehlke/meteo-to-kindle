@@ -1,3 +1,4 @@
+import os
 import subprocess
 import urllib.request
 from time import sleep
@@ -6,6 +7,8 @@ from urllib.error import ContentTooShortError
 from PIL import Image
 
 from airly import Airly
+
+HOME = os.path.dirname(__file__)
 
 
 def crop(image):
@@ -22,7 +25,7 @@ def crop(image):
     return image
 
 
-def removeLogo(image):
+def remove_logo(image):
     pixdata = image.load()
     for y in range(image.size[1]):
         for x in range(image.size[0]):
@@ -33,18 +36,18 @@ def removeLogo(image):
     return image
 
 
-def adjustSize(image):
+def adjust_size(image):
     to_width = 600
     ratio = (to_width / float(image.size[0]))
     new_height = int((float(image.size[1]) * float(ratio)))
     image = image.resize((to_width, new_height), Image.LANCZOS)
-    template = Image.open("template.png")
+    template = Image.open(os.path.join(HOME, 'template.png'))
     template.paste(image)
     return template
 
 
-def pasteCaqi(image):
-    caqi = Image.open('caqi.png')
+def paste_caqi(image):
+    caqi = Image.open(os.path.join(HOME, 'caqi.png'))
     width, height = caqi.size
     caqi.load()
     image.paste(caqi, (0, 500, width, 500 + height))
@@ -53,12 +56,13 @@ def pasteCaqi(image):
 
 
 if __name__ == '__main__':
-    Krakow = [466, 232]
-    url = f"http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&" \
-          f"row={Krakow[0]}&" \
-          f"col={Krakow[1]}&" \
-          f"lang=pl"
-    output = "weather-script-output.png"
+    krakow = [466, 232]
+    url = f'http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&' \
+          f'row={krakow[0]}&' \
+          f'col={krakow[1]}&' \
+          f'lang=pl'
+    output = os.path.join(HOME, 'weather-script-output.png')
+    smb_public_share = os.path.abspath('/home/dietpi/')
     airly = Airly()
     airly.fill_template()
     airly.plot_caqi_history()
@@ -67,18 +71,18 @@ if __name__ == '__main__':
         try:
             urllib.request.urlretrieve(url, output)
             img = Image.open(output)
-            img = img.convert("RGB")
+            img = img.convert('RGB')
         except [SyntaxError, OSError, ContentTooShortError]:
-            print("\nDownload failed... retry in 15 seconds.\n")
+            print('\nDownload failed... retry in 15 seconds.\n')
             sleep(15)
             continue
         break
 
     img = crop(img)
-    img = removeLogo(img)
-    img = adjustSize(img)
-    img = pasteCaqi(img)
+    img = remove_logo(img)
+    img = adjust_size(img)
+    img = paste_caqi(img)
     img.save(output, bits=8)
 
     subprocess.run(['pngcrush', '-c', '0', output])
-    # subprocess.run(['mv', 'pngout.png', output])
+    subprocess.run(['mv', 'pngout.png', smb_public_share])
