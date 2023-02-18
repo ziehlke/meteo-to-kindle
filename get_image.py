@@ -1,11 +1,8 @@
-import os
 import subprocess
-import sys
 import urllib.request
 from time import sleep
 from urllib.error import ContentTooShortError
 
-import requests
 from PIL import Image
 
 from airly import Airly
@@ -40,14 +37,14 @@ def adjustSize(image):
     to_width = 600
     ratio = (to_width / float(image.size[0]))
     new_height = int((float(image.size[1]) * float(ratio)))
-    image = image.resize((to_width, new_height), Image.ANTIALIAS)
-    template = Image.open("/mnt/OpenShare/weather/template.png")
+    image = image.resize((to_width, new_height), Image.LANCZOS)
+    template = Image.open("template.png")
     template.paste(image)
     return template
 
 
 def pasteCaqi(image):
-    caqi = Image.open('/mnt/OpenShare/weather/caqi.png')
+    caqi = Image.open('caqi.png')
     width, height = caqi.size
     caqi.load()
     image.paste(caqi, (0, 500, width, 500 + height))
@@ -56,19 +53,12 @@ def pasteCaqi(image):
 
 
 if __name__ == '__main__':
-    if not os.path.exists('/mnt/OpenShare/weather/'):
-        with open(f'{os.path.dirname(os.path.realpath(__file__))}/.bot_token', 'r') as token_file:
-            TOKEN, CHAT_ID = token_file.readline().split('|')
-            send_text = f'https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text=OpenShareDOWN'
-            response = requests.get(send_text)
-            sys.exit(0)
-
     Krakow = [466, 232]
     url = f"http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&" \
           f"row={Krakow[0]}&" \
           f"col={Krakow[1]}&" \
           f"lang=pl"
-    output = "/mnt/OpenShare/weather/weather-script-output.png"
+    output = "weather-script-output.png"
     airly = Airly()
     airly.fill_template()
     airly.plot_caqi_history()
@@ -91,4 +81,4 @@ if __name__ == '__main__':
     img.save(output, bits=8)
 
     subprocess.run(['pngcrush', '-c', '0', output])
-    subprocess.run(['mv', 'pngout.png', output])
+    # subprocess.run(['mv', 'pngout.png', output])
