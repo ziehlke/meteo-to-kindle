@@ -40,7 +40,7 @@ IMAGE_BITS = 8
 AIRLY_LATITUDE = 50.0739491148
 AIRLY_LONGITUDE = 20.0485859686
 AIRLY_API_URL_TEMPLATE = (
-    "https://airapi.airly.eu/v2/measurements/point?lat={lat}6&lng={lng}"
+    "https://airapi.airly.eu/v2/measurements/point?lat={lat}&lng={lng}"
 )
 
 # Air quality configuration
