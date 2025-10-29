@@ -1,27 +1,27 @@
 import subprocess
-from pathlib import Path
 from time import sleep
 
 import httpx
 from PIL import Image
-
+from io import BytesIO
 from airly import Airly
 from config import HOME_DIR, OUTPUT_FILENAME, SMB_SHARE_PATH, RETRY_DELAY_SECONDS, KRAKOW_COORDS
 from image_processor import WeatherImageProcessor
 
 
-def download_weather_image(
-    url: str, output_path: Path, max_retries: int = 3
-) -> Image.Image:
-    """Download weather image with retry logic."""
+def fetch_weather_image(url: str, max_retries: int = 3) -> Image.Image:
+    """Fetch weather image from URL with retry logic.
+
+    Downloads the image directly into memory without saving to disk.
+    Returns a PIL Image object in RGB format.
+    """
     for attempt in range(max_retries):
         try:
             with httpx.Client(follow_redirects=True) as client:
                 response = client.get(url)
                 response.raise_for_status()
-                output_path.write_bytes(response.content)
-            img = Image.open(output_path)
-            return img.convert("RGB")
+                with Image.open(BytesIO(response.content)) as img:
+                    return img.convert("RGB")
         except (OSError, httpx.HTTPError) as e:
             if attempt == max_retries - 1:
                 raise RuntimeError(
@@ -52,7 +52,7 @@ def main() -> None:
     airly.plot_caqi_history()
 
     # Download and process weather image
-    img = download_weather_image(url, output)
+    img = fetch_weather_image(url)
 
     # Apply image processing
     img = processor.crop_image(img)

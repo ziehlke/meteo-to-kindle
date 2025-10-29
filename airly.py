@@ -92,6 +92,9 @@ class Airly:
 
     def get_value_by_name(self, name: str) -> float:
         """Helper to find value by name from current air quality data."""
+        if not self.data or "current" not in self.data:
+            return 0.0
+
         for v in self.data["current"]["values"]:
             if v["name"] == name:
                 return v["value"]
@@ -115,85 +118,84 @@ class Airly:
         current_caqi = self.data["current"]["indexes"][0]["value"]
         emoji_index = sum(1 for bin_val in CAQI_BINS if current_caqi > bin_val)
 
-        image = Image.open(HOME_DIR / TEMPLATE_FILENAME)
-        draw = ImageDraw.Draw(image)
+        with Image.open(HOME_DIR / TEMPLATE_FILENAME) as image:
+            draw = ImageDraw.Draw(image)
 
-        # Draw emoji and CAQI value
-        draw.text(
-            EMOJI_POSITION,
-            AIR_QUALITY_EMOJIS[emoji_index],
-            fill="black",
-            font=open_moji,
-        )
-        draw.text(
-            CAQI_POSITION,
-            str(round(current_caqi)),
-            fill="black",
-            font=manrope_extra_bold,
-        )
+            # Draw emoji and CAQI value
+            draw.text(
+                EMOJI_POSITION,
+                AIR_QUALITY_EMOJIS[emoji_index],
+                fill="black",
+                font=open_moji,
+            )
+            draw.text(
+                CAQI_POSITION,
+                str(round(current_caqi)),
+                fill="black",
+                font=manrope_extra_bold,
+            )
 
-        # Draw advice text
-        advice = self.data["current"]["indexes"][0]["advice"]
-        draw.text(
-            ADVICE_POSITION,
-            "\n".join(textwrap.wrap(advice, width=ADVICE_WRAP_WIDTH)),
-            fill="black",
-            font=manrope_regular_small,
-        )
+            # Draw advice text
+            advice = self.data["current"]["indexes"][0]["advice"]
+            draw.text(
+                ADVICE_POSITION,
+                "\n".join(textwrap.wrap(advice, width=ADVICE_WRAP_WIDTH)),
+                fill="black",
+                font=manrope_regular_small,
+            )
 
         # Draw current values
         draw.text(
             PM25_POSITION,
-            str(round(self.get_value_by_name("PM25"))),
+            str(round(self.data["current"]["values"][2]["value"])),
             fill="black",
             font=manrope_extra_bold,
         )
         draw.text(
             PM10_POSITION,
-            str(round(self.get_value_by_name("PM10"))),
+            str(round(self.data["current"]["values"][1]["value"])),
             fill="black",
             font=manrope_extra_bold,
         )
         draw.text(
             TEMP_POSITION,
-            str(round(self.get_value_by_name("TEMPERATURE"))),
+            str(round(self.data["current"]["values"][0]["value"])),
             fill="black",
             font=manrope_extra_bold,
         )
 
         # Draw percentage indicators
         pm25_percent = round(
-            100 * self.get_value_by_name("PM25") / PM25_MAX_THRESHOLD
+            100 * self.data["current"]["values"][2]["value"] / PM25_MAX_THRESHOLD
         )
         pm10_percent = round(
-            100 * self.get_value_by_name("PM10") / PM10_MAX_THRESHOLD
+            100 * self.data["current"]["values"][1]["value"] / PM10_MAX_THRESHOLD
         )
         draw.text(
-            PM25_PERCENT_POSITION,
-            f"{pm25_percent}%",
-            fill="gray",
-            font=manrope_bold_small,
-        )
+                PM25_PERCENT_POSITION,
+                f"{pm25_percent}%",
+                fill="gray",
+                font=manrope_bold_small,
+            )
         draw.text(
             PM10_PERCENT_POSITION,
-            f"{pm10_percent}%",
-            fill="gray",
-            font=manrope_bold_small,
-        )
+                f"{pm10_percent}%",
+                fill="gray",
+                font=manrope_bold_small,
+            )
 
-        # Draw pressure and humidity
+            # Draw pressure and humidity
         draw.text(
             PRESSURE_POSITION,
-            str(round(self.get_value_by_name("PRESSURE"))),
+            str(round(self.data["current"]["values"][5]["value"])),
             fill="black",
             font=manrope_extra_bold,
         )
         draw.text(
             HUMIDITY_POSITION,
-            str(round(self.get_value_by_name("HUMIDITY"))),
+            str(round(self.data["current"]["values"][4]["value"])),
             fill="black",
             font=manrope_extra_bold,
         )
 
         image.save(HOME_DIR / TEMPLATE_PROCESSED_FILENAME)
-        image.close()
