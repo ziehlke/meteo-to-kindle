@@ -57,20 +57,20 @@ class WeatherImageProcessor:
         ratio = TARGET_IMAGE_WIDTH / float(image.size[0])
         new_height = int(float(image.size[1]) * float(ratio))
         resized_img = image.resize((TARGET_IMAGE_WIDTH, new_height), Image.LANCZOS)
-        template = Image.open(self.home_dir / TEMPLATE_PROCESSED_FILENAME)
-        template.paste(resized_img)
-        return template
+        with Image.open(self.home_dir / TEMPLATE_PROCESSED_FILENAME) as template:
+            template_copy = template.copy()
+            template_copy.paste(resized_img)
+            return template_copy
 
     def paste_caqi(self, image: Image.Image) -> Image.Image:
         """Paste CAQI chart onto the main image."""
-        caqi = Image.open(self.home_dir / CAQI_FILENAME)
-        width, height = caqi.size
-        caqi.load()
-        target_coords = (*CAQI_CHART_POSITION, CAQI_CHART_POSITION[0] + width,
-                        CAQI_CHART_POSITION[1] + height)
-        image.paste(caqi, target_coords)
-        image.load()
-        return image
+        with Image.open(self.home_dir / CAQI_FILENAME) as caqi:
+            width, height = caqi.size
+            target_coords = (*CAQI_CHART_POSITION, CAQI_CHART_POSITION[0] + width,
+                            CAQI_CHART_POSITION[1] + height)
+            image.paste(caqi, target_coords)
+            image.load()
+            return image
 
     def _resolve_coords(
         self, coords: Tuple, img_size: Tuple[int, int]
