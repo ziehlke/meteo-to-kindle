@@ -77,12 +77,16 @@ class WeatherImageProcessor:
     ) -> Tuple[int, int, int, int]:
         """Resolve relative coordinates to absolute pixel values."""
         width, height = img_size
-        result = []
-        for coord in coords:
-            if coord is None:
-                result.append(width if len(result) == 2 else height)
-            elif coord < 0:
-                result.append(width + coord if len(result) == 2 else height + coord)
-            else:
-                result.append(coord)
-        return tuple(result)
+
+        def resolve(val, axis_max):
+            if val is None:
+                return axis_max
+            if isinstance(val, int) and val < 0:
+                return axis_max + val
+            return val
+
+        x1 = resolve(coords[0], width)
+        y1 = resolve(coords[1], height)
+        x2 = resolve(coords[2], width)
+        y2 = resolve(coords[3], height)
+        return int(x1), int(y1), int(x2), int(y2)
