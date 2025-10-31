@@ -1,67 +1,201 @@
 import os
 import textwrap
 
-import requests
-import numpy as np
+import httpx
 import matplotlib.pyplot as plt
 from PIL import ImageFont, ImageDraw, Image
 from dotenv import load_dotenv
 
+from config import (
+    HOME_DIR,
+    AIRLY_LATITUDE,
+    AIRLY_LONGITUDE,
+    AIRLY_API_URL_TEMPLATE,
+    AIR_QUALITY_EMOJIS,
+    CAQI_BINS,
+    PM25_MAX_THRESHOLD,
+    PM10_MAX_THRESHOLD,
+    CHART_FIGSIZE,
+    CHART_BAR_WIDTH,
+    EMOJI_POSITION,
+    CAQI_POSITION,
+    PM25_POSITION,
+    PM10_POSITION,
+    TEMP_POSITION,
+    PM25_PERCENT_POSITION,
+    PM10_PERCENT_POSITION,
+    PRESSURE_POSITION,
+    HUMIDITY_POSITION,
+    ADVICE_POSITION,
+    ADVICE_WRAP_WIDTH,
+    EMOJI_FONT_SIZE,
+    EXTRA_BOLD_FONT_SIZE,
+    BOLD_SMALL_FONT_SIZE,
+    REGULAR_SMALL_FONT_SIZE,
+    EMOJI_FONT_PATH,
+    EXTRA_BOLD_FONT_PATH,
+    BOLD_FONT_PATH,
+    REGULAR_FONT_PATH,
+    TEMPLATE_FILENAME,
+    CAQI_FILENAME,
+    TEMPLATE_PROCESSED_FILENAME,
+)
+
 load_dotenv()
-HOME = os.path.dirname(__file__)
 
 
 class Airly:
-    lat, long = 50.0739491148, 20.0485859686
-    url = f'https://airapi.airly.eu/v2/measurements/point?lat={lat}6&lng={long}'
     API_KEY = os.environ.get("AIRLY_KEY")
-    EMOJIS = "😍😀🙂😐😟🤬💩"
-    CAQI_BINS = np.array([20, 35, 50, 75, 100, 125])
     data = None
+
+    @property
+    def url(self) -> str:
+        return AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
 
     def __init__(self) -> None:
         super().__init__()
         self.get_data()
 
-    def get_data(self):
-        headers = {'apikey': self.API_KEY, 'Accept': 'application/json'}
-        response = requests.get(self.url, headers)
-        self.data = response.json()
+    def get_data(self) -> None:
+        """Fetch air quality data from Airly API."""
+        if not self.API_KEY:
+            raise ValueError("AIRLY_KEY environment variable not set")
 
-    def plot_caqi_history(self):
-        caqis = [history['indexes'][0].get('value', 0) for history in self.data['history']]
-        colors = [history['indexes'][0]['color'] for history in self.data['history']]
-        times = [history['fromDateTime'].rsplit('T')[1][0:2] for history in self.data['history']]
-        y_pos = np.arange(len(caqis))
+        headers = {"apikey": self.API_KEY, "Accept": "application/json"}
+        try:
+            with httpx.Client() as client:
+                response = client.get(self.url, headers=headers)
+                response.raise_for_status()
+                self.data = response.json()
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"Failed to fetch air quality data: {e}")
 
-        plt.figure(figsize=(7, 1))
-        plt.bar(y_pos, caqis, color=colors, width=0.94)
+    def plot_caqi_history(self) -> None:
+        """Generate and save CAQI history chart."""
+        if not self.data or "history" not in self.data:
+            raise ValueError("No air quality data available")
+
+        caqis = [
+            history["indexes"][0].get("value", 0) for history in self.data["history"]
+        ]
+        colors = [history["indexes"][0]["color"] for history in self.data["history"]]
+        times = [
+            history["fromDateTime"].rsplit("T")[1][0:2]
+            for history in self.data["history"]
+        ]
+        y_pos = range(len(caqis))
+
+        plt.figure(figsize=CHART_FIGSIZE)
+        plt.bar(y_pos, caqis, color=colors, width=CHART_BAR_WIDTH)
         plt.xticks(y_pos, times)
-        plt.savefig(os.path.join(HOME, 'caqi.png'), bbox_inches='tight')
+        plt.savefig(HOME_DIR / CAQI_FILENAME, bbox_inches="tight")
 
-    def fill_template(self):
+    def get_value_by_name(self, name: str) -> float:
+        """Helper to find value by name from current air quality data."""
+        if not self.data or "current" not in self.data:
+            return 0.0
+
+        for v in self.data["current"]["values"]:
+            if v["name"] == name:
+                return v["value"]
+        return 0.0
+
+    def fill_template(self) -> None:
+        """Fill the weather template with air quality data."""
+        if not self.data or "current" not in self.data:
+            raise ValueError("No current air quality data available")
+
         # load fonts
-        open_moji = ImageFont.truetype(os.path.join(HOME, 'Manrope/OpenMoji-Black.ttf'), 60)
-        manrope_extra_bold = ImageFont.truetype(os.path.join(HOME, 'Manrope/Manrope-ExtraBold.ttf'), 40)
-        manrope_bold_small = ImageFont.truetype(os.path.join(HOME, 'Manrope/Manrope-Bold.ttf'), 30)
-        manrope_regular_small = ImageFont.truetype(os.path.join(HOME, 'Manrope/Manrope-Regular.ttf'), 15)
-        current_caqi = self.data['current']['indexes'][0]['value']
-        emoji_index = np.digitize(current_caqi, self.CAQI_BINS)
+        open_moji = ImageFont.truetype(EMOJI_FONT_PATH, EMOJI_FONT_SIZE)
+        manrope_extra_bold = ImageFont.truetype(
+            EXTRA_BOLD_FONT_PATH, EXTRA_BOLD_FONT_SIZE
+        )
+        manrope_bold_small = ImageFont.truetype(BOLD_FONT_PATH, BOLD_SMALL_FONT_SIZE)
+        manrope_regular_small = ImageFont.truetype(
+            REGULAR_FONT_PATH, REGULAR_SMALL_FONT_SIZE
+        )
 
-        image = Image.open(os.path.join(HOME, 'master_template.png'))
-        draw = ImageDraw.Draw(image)
-        draw.text((9, 653), self.EMOJIS[emoji_index], fill="black", font=open_moji)
-        advice = self.data['current']['indexes'][0]['advice']
-        draw.text((9, 740), '\n'.join(textwrap.wrap(advice, width=45)), fill="black", font=manrope_regular_small)
-        draw.text((70, 650), str(round(current_caqi)), fill="black", font=manrope_extra_bold)
-        draw.text((195, 650), str(round(self.data['current']['values'][2]['value'])), fill="black", font=manrope_extra_bold)
-        draw.text((350, 650), str(round(self.data['current']['values'][1]['value'])), fill="black", font=manrope_extra_bold)
-        draw.text((505, 650), str(round(self.data['current']['values'][0]['value'])), fill="black", font=manrope_extra_bold)
+        current_caqi = self.data["current"]["indexes"][0]["value"]
+        emoji_index = sum(1 for bin_val in CAQI_BINS if current_caqi > bin_val)
 
-        draw.text((195, 688), f"{round(100 * self.data['current']['values'][2]['value'] / 50.0)}%", fill="gray", font=manrope_bold_small)
-        draw.text((350, 688), f"{round(100 * self.data['current']['values'][1]['value'] / 25.0)}%", fill="gray", font=manrope_bold_small)
+        with Image.open(HOME_DIR / TEMPLATE_FILENAME) as image:
+            draw = ImageDraw.Draw(image)
 
-        draw.text((350, 720), str(round(self.data['current']['values'][5]['value'])), fill="black", font=manrope_extra_bold)
-        draw.text((505, 720), str(round(self.data['current']['values'][4]['value'])), fill="black", font=manrope_extra_bold)
-        image.save(os.path.join(HOME, 'template.png'))
-        image.close()
+            # Draw emoji and CAQI value
+            draw.text(
+                EMOJI_POSITION,
+                AIR_QUALITY_EMOJIS[emoji_index],
+                fill="black",
+                font=open_moji,
+            )
+            draw.text(
+                CAQI_POSITION,
+                str(round(current_caqi)),
+                fill="black",
+                font=manrope_extra_bold,
+            )
+
+            # Draw advice text
+            advice = self.data["current"]["indexes"][0]["advice"]
+            draw.text(
+                ADVICE_POSITION,
+                "\n".join(textwrap.wrap(advice, width=ADVICE_WRAP_WIDTH)),
+                fill="black",
+                font=manrope_regular_small,
+            )
+
+        # Draw current values
+        draw.text(
+            PM25_POSITION,
+            str(round(self.data["current"]["values"][2]["value"])),
+            fill="black",
+            font=manrope_extra_bold,
+        )
+        draw.text(
+            PM10_POSITION,
+            str(round(self.data["current"]["values"][1]["value"])),
+            fill="black",
+            font=manrope_extra_bold,
+        )
+        draw.text(
+            TEMP_POSITION,
+            str(round(self.data["current"]["values"][0]["value"])),
+            fill="black",
+            font=manrope_extra_bold,
+        )
+
+        # Draw percentage indicators
+        pm25_percent = round(
+            100 * self.data["current"]["values"][2]["value"] / PM25_MAX_THRESHOLD
+        )
+        pm10_percent = round(
+            100 * self.data["current"]["values"][1]["value"] / PM10_MAX_THRESHOLD
+        )
+        draw.text(
+                PM25_PERCENT_POSITION,
+                f"{pm25_percent}%",
+                fill="gray",
+                font=manrope_bold_small,
+            )
+        draw.text(
+            PM10_PERCENT_POSITION,
+                f"{pm10_percent}%",
+                fill="gray",
+                font=manrope_bold_small,
+            )
+
+            # Draw pressure and humidity
+        draw.text(
+            PRESSURE_POSITION,
+            str(round(self.data["current"]["values"][5]["value"])),
+            fill="black",
+            font=manrope_extra_bold,
+        )
+        draw.text(
+            HUMIDITY_POSITION,
+            str(round(self.data["current"]["values"][4]["value"])),
+            fill="black",
+            font=manrope_extra_bold,
+        )
+
+        image.save(HOME_DIR / TEMPLATE_PROCESSED_FILENAME)

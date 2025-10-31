@@ -1,88 +1,70 @@
-import os
 import subprocess
-import urllib.request
 from time import sleep
-from urllib.error import ContentTooShortError
 
+import httpx
 from PIL import Image
-
+from io import BytesIO
 from airly import Airly
-
-HOME = os.path.dirname(__file__)
-
-
-def crop(image):
-    img_down = image.crop((0, 524, image.size[0], 635))
-    img_down.load()
-    image.paste(img_down, (0, 400, image.size[0], 511))
-
-    img_down = image.crop((0, 312, image.size[0], 511))
-    img_down.load()
-    image.paste(img_down, (0, 226, image.size[0], 425))
-
-    image = image.crop((35, 0, image.size[0] - 40, 425))
-    image.load()
-    return image
+from config import HOME_DIR, OUTPUT_FILENAME, SMB_SHARE_PATH, RETRY_DELAY_SECONDS, KRAKOW_COORDS
+from image_processor import WeatherImageProcessor
 
 
-def remove_logo(image):
-    pixdata = image.load()
-    for y in range(image.size[1]):
-        for x in range(image.size[0]):
-            if pixdata[x, y] == (255, 251, 240) or pixdata[x, y] == (244, 244, 244):
-                pixdata[x, y] = (255, 255, 255)
-            elif pixdata[x, y] == (216, 216, 216) or pixdata[x, y] == (215, 216, 215):
-                pixdata[x, y] = (226, 226, 226)
-    return image
+def fetch_weather_image(url: str, max_retries: int = 3) -> Image.Image:
+    """Fetch weather image from URL with retry logic.
+
+    Downloads the image directly into memory without saving to disk.
+    Returns a PIL Image object in RGB format.
+    """
+    for attempt in range(max_retries):
+        try:
+            with httpx.Client(follow_redirects=True) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                with Image.open(BytesIO(response.content)) as img:
+                    return img.convert("RGB")
+        except (OSError, httpx.HTTPError) as e:
+            if attempt == max_retries - 1:
+                raise RuntimeError(
+                    f"Failed to download weather image after {max_retries} attempts: {e}"
+                )
+            print(
+                f"\nDownload failed (attempt {attempt + 1}/{max_retries}), retrying in {RETRY_DELAY_SECONDS} seconds...\n"
+            )
+            sleep(RETRY_DELAY_SECONDS)
 
 
-def adjust_size(image):
-    to_width = 600
-    ratio = (to_width / float(image.size[0]))
-    new_height = int((float(image.size[1]) * float(ratio)))
-    image = image.resize((to_width, new_height), Image.LANCZOS)
-    template = Image.open(os.path.join(HOME, 'template.png'))
-    template.paste(image)
-    return template
+def main() -> None:
+    """Main execution function."""
+    # Configuration
+    url = (
+        f"http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&"
+        f"row={KRAKOW_COORDS[0]}&col={KRAKOW_COORDS[1]}&lang=pl"
+    )
+    output = HOME_DIR / OUTPUT_FILENAME
+    smb_public_share = SMB_SHARE_PATH
 
-
-def paste_caqi(image):
-    caqi = Image.open(os.path.join(HOME, 'caqi.png'))
-    width, height = caqi.size
-    caqi.load()
-    image.paste(caqi, (0, 500, width, 500 + height))
-    image.load()
-    return image
-
-
-if __name__ == '__main__':
-    krakow = [466, 232]
-    url = f'http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&' \
-          f'row={krakow[0]}&' \
-          f'col={krakow[1]}&' \
-          f'lang=pl'
-    output = os.path.join(HOME, 'weather-script-output.png')
-    smb_public_share = os.path.abspath('/home/dietpi/')
+    # Initialize components
     airly = Airly()
+    processor = WeatherImageProcessor(HOME_DIR)
+
+    # Generate air quality data
     airly.fill_template()
     airly.plot_caqi_history()
 
-    while True:
-        try:
-            urllib.request.urlretrieve(url, output)
-            img = Image.open(output)
-            img = img.convert('RGB')
-        except [SyntaxError, OSError, ContentTooShortError]:
-            print('\nDownload failed... retry in 15 seconds.\n')
-            sleep(15)
-            continue
-        break
+    # Download and process weather image
+    img = fetch_weather_image(url)
 
-    img = crop(img)
-    img = remove_logo(img)
-    img = adjust_size(img)
-    img = paste_caqi(img)
+    # Apply image processing
+    img = processor.crop_image(img)
+    img = processor.remove_logo(img)
+    img = processor.adjust_size(img)
+    img = processor.paste_caqi(img)
     img.save(output, bits=8)
 
-    subprocess.run(['pngcrush', '-c', '0', output])
-    subprocess.run(['mv', 'pngout.png', smb_public_share])
+    # Optimize and move file
+    subprocess.run(["pngcrush", "-c", "0", output])
+    subprocess.run(["mv", "pngout.png", smb_public_share])
+
+
+if __name__ == "__main__":
+    main()
