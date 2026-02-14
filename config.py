@@ -45,8 +45,8 @@ AIRLY_API_URL_TEMPLATE = (
 
 # Air quality configuration
 CAQI_BINS: List[int] = [20, 35, 50, 75, 100, 125]
-PM25_MAX_THRESHOLD = 50.0
-PM10_MAX_THRESHOLD = 25.0
+PM25_MAX_THRESHOLD = 25.0  # WHO 24h guideline (µg/m³)
+PM10_MAX_THRESHOLD = 50.0  # WHO 24h guideline (µg/m³)
 
 # Emoji mapping for air quality
 AIR_QUALITY_EMOJIS = "😍😀🙂😐😟🤬💩"
@@ -58,12 +58,12 @@ CHART_BAR_WIDTH = 0.94
 # Text positioning on template
 EMOJI_POSITION = (9, 653)
 CAQI_POSITION = (70, 650)
-PM25_POSITION = (195, 650)
-PM10_POSITION = (350, 650)
-TEMP_POSITION = (505, 650)
-PM25_PERCENT_POSITION = (195, 688)
-PM10_PERCENT_POSITION = (350, 688)
-PRESSURE_POSITION = (350, 720)
+PM10_POSITION = (195, 650)
+PM25_POSITION = (350, 650)
+PM1_POSITION = (505, 650)
+PM10_PERCENT_POSITION = (195, 688)
+PM25_PERCENT_POSITION = (350, 688)
+TEMP_POSITION = (350, 720)
 HUMIDITY_POSITION = (505, 720)
 ADVICE_POSITION = (9, 740)
 
@@ -78,10 +78,10 @@ ADVICE_WRAP_WIDTH = 45
 
 # Image crop coordinates
 CROP_OPERATIONS = [
-    ((0, 524, None, 635), (0, 400, None, 511)),
-    ((0, 312, None, 511), (0, 226, None, 425)),
+    ((0, 646, None, 757), (0, 522, None, 633)),
+    ((0, 434, None, 633), (0, 348, None, 547)),
 ]
-FINAL_CROP_COORDS = (35, 0, -40, 425)
+FINAL_CROP_COORDS = (35, 122, -40, 547)
 
 # CAQI chart position
 CAQI_CHART_POSITION = (0, 500)
