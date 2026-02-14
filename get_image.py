@@ -1,4 +1,5 @@
 import shutil
+from pathlib import Path
 from time import sleep
 
 import httpx
@@ -65,7 +66,7 @@ def main() -> None:
     if shutil.which("pngcrush"):
         import subprocess
         subprocess.run(["pngcrush", "-c", "0", str(output)], check=True)
-        shutil.move("pngout.png", smb_public_share)
+        Path("pngout.png").replace(smb_public_share / OUTPUT_FILENAME)
 
 if __name__ == "__main__":
     main()
