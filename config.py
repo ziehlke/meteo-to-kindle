@@ -78,10 +78,10 @@ ADVICE_WRAP_WIDTH = 45
 
 # Image crop coordinates
 CROP_OPERATIONS = [
-    ((0, 524, None, 635), (0, 400, None, 511)),
-    ((0, 312, None, 511), (0, 226, None, 425)),
+    ((0, 646, None, 757), (0, 522, None, 633)),
+    ((0, 434, None, 633), (0, 348, None, 547)),
 ]
-FINAL_CROP_COORDS = (35, 0, -40, 425)
+FINAL_CROP_COORDS = (35, 122, -40, 547)
 
 # CAQI chart position
 CAQI_CHART_POSITION = (0, 500)
