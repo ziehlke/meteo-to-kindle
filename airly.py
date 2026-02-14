@@ -21,10 +21,10 @@ from config import (
     CAQI_POSITION,
     PM25_POSITION,
     PM10_POSITION,
+    PM1_POSITION,
     TEMP_POSITION,
     PM25_PERCENT_POSITION,
     PM10_PERCENT_POSITION,
-    PRESSURE_POSITION,
     HUMIDITY_POSITION,
     ADVICE_POSITION,
     ADVICE_WRAP_WIDTH,
@@ -46,17 +46,12 @@ load_dotenv()
 
 class Airly:
     API_KEY = os.environ.get("AIRLY_KEY")
-    data = None
-
-    @property
-    def url(self) -> str:
-        return AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
 
     def __init__(self) -> None:
-        super().__init__()
-        self.get_data()
+        self.url = AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
+        self.data = self.get_data()
 
-    def get_data(self) -> None:
+    def get_data(self) -> dict:
         """Fetch air quality data from Airly API."""
         if not self.API_KEY:
             raise ValueError("AIRLY_KEY environment variable not set")
@@ -66,7 +61,7 @@ class Airly:
             with httpx.Client() as client:
                 response = client.get(self.url, headers=headers)
                 response.raise_for_status()
-                self.data = response.json()
+                return response.json()
         except httpx.HTTPError as e:
             raise RuntimeError(f"Failed to fetch air quality data: {e}")
 
@@ -144,58 +139,60 @@ class Airly:
                 font=manrope_regular_small,
             )
 
-        # Draw current values
-        draw.text(
-            PM25_POSITION,
-            str(round(self.data["current"]["values"][2]["value"])),
-            fill="black",
-            font=manrope_extra_bold,
-        )
-        draw.text(
-            PM10_POSITION,
-            str(round(self.data["current"]["values"][1]["value"])),
-            fill="black",
-            font=manrope_extra_bold,
-        )
-        draw.text(
-            TEMP_POSITION,
-            str(round(self.data["current"]["values"][0]["value"])),
-            fill="black",
-            font=manrope_extra_bold,
-        )
+            # Draw current values
+            pm1 = self.get_value_by_name("PM1")
+            pm25 = self.get_value_by_name("PM25")
+            pm10 = self.get_value_by_name("PM10")
+            temperature = self.get_value_by_name("TEMPERATURE")
+            humidity = self.get_value_by_name("HUMIDITY")
 
-        # Draw percentage indicators
-        pm25_percent = round(
-            100 * self.data["current"]["values"][2]["value"] / PM25_MAX_THRESHOLD
-        )
-        pm10_percent = round(
-            100 * self.data["current"]["values"][1]["value"] / PM10_MAX_THRESHOLD
-        )
-        draw.text(
+            draw.text(
+                PM25_POSITION,
+                str(round(pm25)),
+                fill="black",
+                font=manrope_extra_bold,
+            )
+            draw.text(
+                PM10_POSITION,
+                str(round(pm10)),
+                fill="black",
+                font=manrope_extra_bold,
+            )
+            draw.text(
+                PM1_POSITION,
+                str(round(pm1)),
+                fill="black",
+                font=manrope_extra_bold,
+            )
+
+            # Draw percentage indicators
+            pm25_percent = round(100 * pm25 / PM25_MAX_THRESHOLD)
+            pm10_percent = round(100 * pm10 / PM10_MAX_THRESHOLD)
+            draw.text(
                 PM25_PERCENT_POSITION,
                 f"{pm25_percent}%",
                 fill="gray",
                 font=manrope_bold_small,
             )
-        draw.text(
-            PM10_PERCENT_POSITION,
+            draw.text(
+                PM10_PERCENT_POSITION,
                 f"{pm10_percent}%",
                 fill="gray",
                 font=manrope_bold_small,
             )
 
-            # Draw pressure and humidity
-        draw.text(
-            PRESSURE_POSITION,
-            str(round(self.data["current"]["values"][5]["value"])),
-            fill="black",
-            font=manrope_extra_bold,
-        )
-        draw.text(
-            HUMIDITY_POSITION,
-            str(round(self.data["current"]["values"][4]["value"])),
-            fill="black",
-            font=manrope_extra_bold,
-        )
+            # Draw temperature and humidity
+            draw.text(
+                TEMP_POSITION,
+                str(round(temperature)),
+                fill="black",
+                font=manrope_extra_bold,
+            )
+            draw.text(
+                HUMIDITY_POSITION,
+                str(round(humidity)),
+                fill="black",
+                font=manrope_extra_bold,
+            )
 
-        image.save(HOME_DIR / TEMPLATE_PROCESSED_FILENAME)
+            image.save(HOME_DIR / TEMPLATE_PROCESSED_FILENAME)
