@@ -1,11 +1,14 @@
-import subprocess
+import shutil
 from time import sleep
 
 import httpx
 from PIL import Image
 from io import BytesIO
 from airly import Airly
-from config import HOME_DIR, OUTPUT_FILENAME, SMB_SHARE_PATH, RETRY_DELAY_SECONDS, KRAKOW_COORDS
+from config import (
+    HOME_DIR, OUTPUT_FILENAME, SMB_SHARE_PATH, RETRY_DELAY_SECONDS,
+    KRAKOW_COORDS, WEATHER_URL_TEMPLATE,
+)
 from image_processor import WeatherImageProcessor
 
 
@@ -36,10 +39,7 @@ def fetch_weather_image(url: str, max_retries: int = 3) -> Image.Image:
 def main() -> None:
     """Main execution function."""
     # Configuration
-    url = (
-        f"http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&"
-        f"row={KRAKOW_COORDS[0]}&col={KRAKOW_COORDS[1]}&lang=pl"
-    )
+    url = WEATHER_URL_TEMPLATE.format(row=KRAKOW_COORDS[0], col=KRAKOW_COORDS[1])
     output = HOME_DIR / OUTPUT_FILENAME
     smb_public_share = SMB_SHARE_PATH
 
@@ -62,9 +62,10 @@ def main() -> None:
     img.save(output, bits=8)
 
     # Optimize and move file
-    subprocess.run(["pngcrush", "-c", "0", output])
-    subprocess.run(["mv", "pngout.png", smb_public_share])
-
+    if shutil.which("pngcrush"):
+        import subprocess
+        subprocess.run(["pngcrush", "-c", "0", str(output)], check=True)
+        shutil.move("pngout.png", smb_public_share)
 
 if __name__ == "__main__":
     main()
