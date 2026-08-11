@@ -7,6 +7,7 @@
 - Tests live in `tests/`, network calls are mocked with respx, image assertions use synthetic PIL images
 - Lint: `uv run ruff check .` (strict rule sets in `pyproject.toml` under `[tool.ruff.lint]`; `--fix` auto-fixes what it can)
 - Format: `uv run ruff format .` (CI enforces it via `uv run ruff format --check .`)
+- Type check: `uv run pyrefly check` (strict preset, configured in `pyproject.toml` under `[tool.pyrefly]`)
 - Dependencies defined in `pyproject.toml` (dev tools in the `dev` dependency group), exact versions pinned in `uv.lock`
 - Dependabot (`.github/dependabot.yml`) opens grouped upgrade PRs weekly; CI (`.github/workflows/ci.yml`) runs ruff + pytest on every PR
 

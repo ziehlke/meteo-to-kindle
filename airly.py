@@ -4,6 +4,7 @@ import os
 import textwrap
 from bisect import bisect_right
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 import matplotlib
@@ -85,16 +86,16 @@ class Airly:
         self._url = AIRLY_API_URL_TEMPLATE.format(
             lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE
         )
-        self._data: dict | None = None
+        self._data: dict[str, Any] | None = None
 
     @property
-    def data(self) -> dict:
+    def data(self) -> dict[str, Any]:
         """Measurement data, fetched on first access and cached afterwards."""
         if self._data is None:
             self._data = self._fetch_data()
         return self._data
 
-    def _fetch_data(self) -> dict:
+    def _fetch_data(self) -> dict[str, Any]:
         """Fetch air quality data from the Airly API."""
         try:
             with httpx.Client() as client:

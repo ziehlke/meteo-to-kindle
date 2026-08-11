@@ -13,6 +13,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyrefly",
     "pytest",
     "pytest-cov",
     "respx",
@@ -42,6 +43,10 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # S101: pytest rewrites asserts; test files never run with `python -O`
 "tests/**" = ["S101"]
+
+[tool.pyrefly]
+preset = "strict"
+python-version = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
