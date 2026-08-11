@@ -1,9 +1,11 @@
 """Tests for image_processor: geometry, color replacement and non-mutation."""
 
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
-from image_processor import WeatherImageProcessor
+from image_processor import Box, WeatherImageProcessor
 
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
@@ -25,16 +27,16 @@ def _solid(size: tuple[int, int], color: tuple[int, int, int]) -> Image.Image:
         ((35, 122, -40, -10), (35, 122, 560, 747)),  # negatives count from edge
     ],
 )
-def test_resolve_box(box, expected):
+def test_resolve_box(box: Box, expected: tuple[int, int, int, int]) -> None:
     assert WeatherImageProcessor._resolve_box(box, METEOGRAM_SIZE) == expected
 
 
-def test_crop_image_moves_sections_and_crops():
+def test_crop_image_moves_sections_and_crops(tmp_path: Path) -> None:
     # Red band exactly covering the first crop source region
     img = _solid(METEOGRAM_SIZE, BLUE)
     img.paste(_solid((600, 757 - 646), RED), (0, 646))
 
-    processor = WeatherImageProcessor(home_dir=None)
+    processor = WeatherImageProcessor(home_dir=tmp_path)
     result = processor.crop_image(img)
 
     # Final crop (35, 122, -40, 547) of 600x757
@@ -48,7 +50,7 @@ def test_crop_image_moves_sections_and_crops():
     assert result.getpixel((0, 400 - 122)) == BLUE
 
 
-def test_remove_logo_replaces_exact_colors_only():
+def test_remove_logo_replaces_exact_colors_only(tmp_path: Path) -> None:
     img = Image.new("RGB", (3, 2))
     pixels = [
         (255, 251, 240),  # white-ish -> pure white
@@ -60,7 +62,7 @@ def test_remove_logo_replaces_exact_colors_only():
     ]
     img.putdata(pixels)
 
-    processor = WeatherImageProcessor(home_dir=None)
+    processor = WeatherImageProcessor(home_dir=tmp_path)
     result = processor.remove_logo(img)
 
     expected = [
@@ -74,7 +76,7 @@ def test_remove_logo_replaces_exact_colors_only():
     assert [result.getpixel((x, y)) for y in range(2) for x in range(3)] == expected
 
 
-def test_adjust_size_resizes_and_pastes_onto_template(tmp_path):
+def test_adjust_size_resizes_and_pastes_onto_template(tmp_path: Path) -> None:
     template = _solid((600, 800), BLUE)
     template.save(tmp_path / "template.png")
     weather = _solid((525, 425), RED)
@@ -89,7 +91,7 @@ def test_adjust_size_resizes_and_pastes_onto_template(tmp_path):
     assert weather.size == (525, 425)  # input untouched
 
 
-def test_paste_caqi_draws_chart_without_mutating_input(tmp_path):
+def test_paste_caqi_draws_chart_without_mutating_input(tmp_path: Path) -> None:
     caqi = _solid((100, 50), GREEN)
     caqi.save(tmp_path / "caqi.png")
     base = _solid((600, 800), BLUE)
