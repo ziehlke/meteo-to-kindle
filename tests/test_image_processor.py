@@ -1,7 +1,7 @@
 """Tests for image_processor: geometry, color replacement and non-mutation."""
 
-from PIL import Image
 import pytest
+from PIL import Image
 
 from image_processor import WeatherImageProcessor
 

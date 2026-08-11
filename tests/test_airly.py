@@ -82,7 +82,7 @@ def test_data_is_fetched_once_with_api_key(airly_client):
 def test_fetch_failure_raises_runtime_error(airly_client):
     respx.get(AIRLY_URL).mock(return_value=httpx.Response(401))
     with pytest.raises(RuntimeError, match="Failed to fetch air quality data"):
-        airly_client.data
+        _ = airly_client.data  # property access triggers the fetch
 
 
 # ----------------------------------------------------------------- values
