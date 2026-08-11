@@ -51,9 +51,12 @@ python-version = "3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Treat warnings as errors: dependency deprecations surface on upgrades
+filterwarnings = ["error"]
 
 [tool.coverage.run]
 source = ["airly", "config", "get_image", "image_processor"]
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
+fail_under = 100
