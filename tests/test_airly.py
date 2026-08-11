@@ -1,10 +1,14 @@
 """Tests for airly: API fetching, value parsing and template rendering."""
 
 import shutil
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
 import respx
+from PIL.ImageFont import FreeTypeFont
 
 import airly
 from airly import Airly, _percent
@@ -18,7 +22,7 @@ from config import (
 
 AIRLY_URL = AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
 
-PAYLOAD = {
+PAYLOAD: dict[str, Any] = {
     "current": {
         "indexes": [{"value": 42.4, "advice": "Take a walk!", "color": "#60BC46"}],
         "values": [
@@ -43,7 +47,7 @@ PAYLOAD = {
 
 
 @pytest.fixture
-def airly_client(monkeypatch) -> Airly:
+def airly_client(monkeypatch: pytest.MonkeyPatch) -> Airly:
     """An Airly instance with a fake API key and no network access."""
     monkeypatch.setenv("AIRLY_KEY", "test-key")
     return Airly()
@@ -52,24 +56,30 @@ def airly_client(monkeypatch) -> Airly:
 class RecordingDraw:
     """Stand-in for ImageDraw.Draw that records every draw.text call."""
 
-    def __init__(self):
-        self.calls = []
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
 
-    def text(self, position, text, fill=None, font=None):
+    def text(
+        self,
+        position: tuple[int, int],
+        text: str,
+        fill: str | None = None,
+        font: FreeTypeFont | None = None,
+    ) -> None:
         self.calls.append({"position": position, "text": text, "fill": fill})
 
 
 # --------------------------------------------------------------------- API
 
 
-def test_init_requires_api_key(monkeypatch):
+def test_init_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AIRLY_KEY", raising=False)
     with pytest.raises(ValueError, match="AIRLY_KEY"):
         Airly()
 
 
 @respx.mock
-def test_data_is_fetched_once_with_api_key(airly_client):
+def test_data_is_fetched_once_with_api_key(airly_client: Airly) -> None:
     route = respx.get(AIRLY_URL).mock(return_value=httpx.Response(200, json=PAYLOAD))
 
     assert airly_client.data == PAYLOAD
@@ -79,7 +89,7 @@ def test_data_is_fetched_once_with_api_key(airly_client):
 
 
 @respx.mock
-def test_fetch_failure_raises_runtime_error(airly_client):
+def test_fetch_failure_raises_runtime_error(airly_client: Airly) -> None:
     respx.get(AIRLY_URL).mock(return_value=httpx.Response(401))
     with pytest.raises(RuntimeError, match="Failed to fetch air quality data"):
         _ = airly_client.data  # property access triggers the fetch
@@ -88,12 +98,12 @@ def test_fetch_failure_raises_runtime_error(airly_client):
 # ----------------------------------------------------------------- values
 
 
-def test_get_value_by_name(airly_client):
+def test_get_value_by_name(airly_client: Airly) -> None:
     airly_client._data = PAYLOAD
     assert airly_client.get_value_by_name("PM25") == 5.2
 
 
-def test_get_value_by_name_returns_zero_for_missing_data(airly_client):
+def test_get_value_by_name_returns_zero_for_missing_data(airly_client: Airly) -> None:
     airly_client._data = PAYLOAD
     assert airly_client.get_value_by_name("NOPE") == 0.0
     airly_client._data = {}
@@ -104,22 +114,30 @@ def test_get_value_by_name_returns_zero_for_missing_data(airly_client):
     ("value", "threshold", "expected"),
     [(5.2, 25.0, "21%"), (7.4, 50.0, "15%"), (25.0, 25.0, "100%")],
 )
-def test_percent(value, threshold, expected):
+def test_percent(value: float, threshold: float, expected: str) -> None:
     assert _percent(value, threshold) == expected
 
 
 # ----------------------------------------------------------------- render
 
+RenderTemplate = Callable[[dict[str, Any]], list[dict[str, Any]]]
+
 
 @pytest.fixture
-def rendered_template(monkeypatch, tmp_path):
+def rendered_template(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> RenderTemplate:
     """Run fill_template with a recording draw object and return its calls."""
 
-    def render(payload):
+    def render(payload: dict[str, Any]) -> list[dict[str, Any]]:
         shutil.copy(airly.HOME_DIR / "master_template.png", tmp_path)
         monkeypatch.setattr(airly, "HOME_DIR", tmp_path)
         recorder = RecordingDraw()
-        monkeypatch.setattr(airly.ImageDraw, "Draw", lambda image: recorder)
+
+        def fake_draw(_image: object) -> RecordingDraw:
+            return recorder
+
+        monkeypatch.setattr(airly.ImageDraw, "Draw", fake_draw)
         client = Airly()
         client._data = payload
         client.fill_template()
@@ -128,7 +146,7 @@ def rendered_template(monkeypatch, tmp_path):
     return render
 
 
-def test_fill_template_draws_all_values(rendered_template):
+def test_fill_template_draws_all_values(rendered_template: RenderTemplate) -> None:
     calls = rendered_template(PAYLOAD)
     drawn = {(c["position"], c["text"]): c["fill"] for c in calls}
 
@@ -136,17 +154,21 @@ def test_fill_template_draws_all_values(rendered_template):
     assert drawn[(ADVICE_POSITION, "Take a walk!")] == "black"
 
 
-def test_fill_template_requires_current_data(rendered_template):
+def test_fill_template_requires_current_data(rendered_template: RenderTemplate) -> None:
     with pytest.raises(ValueError, match="No current air quality data"):
         rendered_template({})
 
 
-@pytest.mark.parametrize(
-    ("caqi", "emoji"),
-    [(15, "😍"), (42.4, "🙂"), (200, "💩")],
-)
-def test_fill_template_picks_emoji_by_caqi(rendered_template, caqi, emoji):
-    payload = {"current": {"indexes": [{"value": caqi, "advice": "..."}], "values": []}}
+@pytest.mark.parametrize(("caqi", "emoji"), [(15, "😍"), (42.4, "🙂"), (200, "💩")])
+def test_fill_template_picks_emoji_by_caqi(
+    rendered_template: RenderTemplate, caqi: float, emoji: str
+) -> None:
+    payload = {
+        "current": {
+            "indexes": [{"value": caqi, "advice": "..."}],
+            "values": [{"name": "PM1", "value": 1.0}],
+        }
+    }
     calls = rendered_template(payload)
     emoji_call = next(c for c in calls if c["text"] in "😍😀🙂😐😟🤬💩")
     assert emoji_call["text"] == emoji
@@ -155,14 +177,16 @@ def test_fill_template_picks_emoji_by_caqi(rendered_template, caqi, emoji):
 # ------------------------------------------------------------------ chart
 
 
-def test_plot_caqi_history_saves_chart(airly_client, monkeypatch, tmp_path):
+def test_plot_caqi_history_saves_chart(
+    airly_client: Airly, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(airly, "HOME_DIR", tmp_path)
     airly_client._data = PAYLOAD
     airly_client.plot_caqi_history()
     assert (tmp_path / "caqi.png").exists()
 
 
-def test_plot_caqi_history_requires_history(airly_client):
+def test_plot_caqi_history_requires_history(airly_client: Airly) -> None:
     airly_client._data = {"current": PAYLOAD["current"]}
     with pytest.raises(ValueError, match="No air quality data"):
         airly_client.plot_caqi_history()

@@ -3,6 +3,7 @@
 import shutil
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -24,7 +25,7 @@ from get_image import fetch_weather_image, publish_to_share
 METEO_URL = WEATHER_URL_TEMPLATE.format(row=KRAKOW_COORDS[0], col=KRAKOW_COORDS[1])
 AIRLY_URL = AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
 
-AIRLY_PAYLOAD = {
+AIRLY_PAYLOAD: dict[str, Any] = {
     "current": {
         "indexes": [{"value": 42.4, "advice": "Take a walk!"}],
         "values": [
@@ -44,22 +45,32 @@ AIRLY_PAYLOAD = {
 }
 
 
-def _png_bytes(size: tuple[int, int], color=(255, 255, 255)) -> bytes:
+def _png_bytes(
+    size: tuple[int, int], color: tuple[int, int, int] = (255, 255, 255)
+) -> bytes:
     buffer = BytesIO()
     Image.new("RGB", size, color).save(buffer, format="PNG")
     return buffer.getvalue()
 
 
+def _no_pngcrush(_name: str) -> None:
+    return None
+
+
+def _found_pngcrush(_name: str) -> str:
+    return "/usr/bin/pngcrush"
+
+
 @pytest.fixture
-def fast_sleep(monkeypatch):
+def fast_sleep(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     """Replace the real sleep with a recorder so tests don't wait."""
-    calls = []
+    calls: list[float] = []
     monkeypatch.setattr(get_image, "sleep", calls.append)
     return calls
 
 
 @respx.mock
-def test_fetch_weather_image_success():
+def test_fetch_weather_image_success() -> None:
     respx.get(METEO_URL).mock(
         return_value=httpx.Response(200, content=_png_bytes((8, 8)))
     )
@@ -69,7 +80,7 @@ def test_fetch_weather_image_success():
 
 
 @respx.mock
-def test_fetch_weather_image_retries_then_succeeds(fast_sleep):
+def test_fetch_weather_image_retries_then_succeeds(fast_sleep: list[float]) -> None:
     respx.get(METEO_URL).mock(
         side_effect=[
             httpx.Response(500),
@@ -82,7 +93,9 @@ def test_fetch_weather_image_retries_then_succeeds(fast_sleep):
 
 
 @respx.mock
-def test_fetch_weather_image_gives_up_after_max_retries(fast_sleep):
+def test_fetch_weather_image_gives_up_after_max_retries(
+    fast_sleep: list[float],
+) -> None:
     respx.get(METEO_URL).mock(return_value=httpx.Response(500))
     with pytest.raises(RuntimeError, match="after 3 attempts"):
         fetch_weather_image(METEO_URL)
@@ -92,20 +105,24 @@ def test_fetch_weather_image_gives_up_after_max_retries(fast_sleep):
 # --------------------------------------------------------------- publishing
 
 
-def test_publish_skipped_without_pngcrush(monkeypatch):
-    monkeypatch.setattr(get_image.shutil, "which", lambda _: None)
-    run_calls = []
-    monkeypatch.setattr(
-        get_image.subprocess, "run", lambda *a, **kw: run_calls.append(a)
-    )
+def test_publish_skipped_without_pngcrush(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(get_image.shutil, "which", _no_pngcrush)
+    run_calls: list[tuple[object, ...]] = []
+
+    def fake_run(*args: object, **kwargs: object) -> None:
+        run_calls.append(args)
+
+    monkeypatch.setattr(get_image.subprocess, "run", fake_run)
     publish_to_share(Path("out.png"), Path("/somewhere"))
     assert run_calls == []
 
 
-def test_publish_crushes_and_moves_to_share(monkeypatch, tmp_path):
-    monkeypatch.setattr(get_image.shutil, "which", lambda _: "/usr/bin/pngcrush")
+def test_publish_crushes_and_moves_to_share(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(get_image.shutil, "which", _found_pngcrush)
 
-    def fake_run(cmd, check):
+    def fake_run(cmd: list[str], check: bool) -> None:
         Path("pngout.png").write_bytes(b"crushed")  # pngcrush's output file
 
     monkeypatch.setattr(get_image.subprocess, "run", fake_run)
@@ -122,9 +139,11 @@ def test_publish_crushes_and_moves_to_share(monkeypatch, tmp_path):
 
 
 @respx.mock
-def test_main_end_to_end_offline(monkeypatch, tmp_path):
+def test_main_end_to_end_offline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setenv("AIRLY_KEY", "test-key")
-    monkeypatch.setattr(get_image.shutil, "which", lambda _: None)
+    monkeypatch.setattr(get_image.shutil, "which", _no_pngcrush)
 
     # Redirect all generated files into a temp directory
     shutil.copy(airly.HOME_DIR / "master_template.png", tmp_path)
