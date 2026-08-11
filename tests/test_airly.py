@@ -125,7 +125,7 @@ RenderTemplate = Callable[[dict[str, Any]], list[dict[str, Any]]]
 
 @pytest.fixture
 def rendered_template(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    airly_client: Airly, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> RenderTemplate:
     """Run fill_template with a recording draw object and return its calls."""
 
@@ -138,9 +138,8 @@ def rendered_template(
             return recorder
 
         monkeypatch.setattr(airly.ImageDraw, "Draw", fake_draw)
-        client = Airly()
-        client._data = payload
-        client.fill_template()
+        airly_client._data = payload
+        airly_client.fill_template()
         return recorder.calls
 
     return render
@@ -159,7 +158,21 @@ def test_fill_template_requires_current_data(rendered_template: RenderTemplate) 
         rendered_template({})
 
 
-@pytest.mark.parametrize(("caqi", "emoji"), [(15, "😍"), (42.4, "🙂"), (200, "💩")])
+# every emoji bucket covered; boundary values must keep the lower emoji,
+# e.g. exactly 20 -> index 0 (😍)
+@pytest.mark.parametrize(
+    ("caqi", "emoji"),
+    [
+        (15, "😍"),
+        (20, "😍"),
+        (21, "😀"),
+        (42.4, "🙂"),
+        (60, "😐"),
+        (90, "😟"),
+        (110, "🤬"),
+        (200, "💩"),
+    ],
+)
 def test_fill_template_picks_emoji_by_caqi(
     rendered_template: RenderTemplate, caqi: float, emoji: str
 ) -> None:
