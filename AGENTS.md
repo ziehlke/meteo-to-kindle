@@ -5,8 +5,8 @@
 - Run main script: `uv run get_image.py`
 - Run tests: `uv run pytest` (with coverage: `uv run pytest --cov --cov-report=term-missing`)
 - Tests live in `tests/`, network calls are mocked with respx, image assertions use synthetic PIL images
-- Check syntax: `uv run python -m py_compile airly.py get_image.py config.py image_processor.py`
-- Lint: `ruff check airly.py get_image.py config.py image_processor.py`
+- Lint: `uv run ruff check .` (strict rule sets in `pyproject.toml` under `[tool.ruff.lint]`; `--fix` auto-fixes what it can)
+- Format: `uv run ruff format .` (CI enforces it via `uv run ruff format --check .`)
 - Dependencies defined in `pyproject.toml` (dev tools in the `dev` dependency group), exact versions pinned in `uv.lock`
 - Dependabot (`.github/dependabot.yml`) opens grouped upgrade PRs weekly; CI (`.github/workflows/ci.yml`) runs ruff + pytest on every PR
 
