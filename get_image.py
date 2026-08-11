@@ -66,7 +66,7 @@ def main() -> None:
     if shutil.which("pngcrush"):
         import subprocess
         subprocess.run(["pngcrush", "-c", "0", str(output)], check=True)
-        Path("pngout.png").replace(smb_public_share / OUTPUT_FILENAME)
+        Path("pngout.png").replace(smb_public_share / "pngout.png")
 
 if __name__ == "__main__":
     main()
