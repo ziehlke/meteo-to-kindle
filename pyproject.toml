@@ -16,7 +16,32 @@ dev = [
     "pytest",
     "pytest-cov",
     "respx",
+    "ruff",
 ]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear (common bugs)
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade (modern syntax)
+    "SIM", # flake8-simplify
+    "RET", # flake8-return
+    "PTH", # flake8-use-pathlib
+    "S",   # flake8-bandit (security)
+    "TID", # flake8-tidy-imports
+    "RUF", # ruff-specific rules
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S101: pytest rewrites asserts; test files never run with `python -O`
+"tests/**" = ["S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
