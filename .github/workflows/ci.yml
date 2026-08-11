@@ -17,6 +17,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
+      - name: Audit dependencies for vulnerabilities
+        run: uv audit --preview-features audit-command
+
       - name: Lint
         run: uv run ruff check .
 
