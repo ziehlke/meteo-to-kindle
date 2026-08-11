@@ -2,7 +2,7 @@
 
 import os
 import textwrap
-from bisect import bisect_right
+from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Any
 
@@ -155,7 +155,7 @@ class Airly:
         content = [
             (
                 EMOJI_POSITION,
-                AIR_QUALITY_EMOJIS[bisect_right(CAQI_BINS, caqi)],
+                AIR_QUALITY_EMOJIS[bisect_left(CAQI_BINS, caqi)],
                 fonts.emoji,
                 "black",
             ),
