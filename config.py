@@ -1,16 +1,14 @@
 """Configuration constants for the meteo-to-kindle application."""
 
 from pathlib import Path
-from typing import List, Tuple
 
 # Directory configuration
 HOME_DIR = Path(__file__).parent
 
 # Weather service configuration
-KRAKOW_COORDS: Tuple[int, int] = (466, 232)
+KRAKOW_COORDS: tuple[int, int] = (466, 232)
 WEATHER_URL_TEMPLATE = (
-    "http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&"
-    "row={row}&col={col}&lang=pl"
+    "http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&row={row}&col={col}&lang=pl"
 )
 
 # File paths
@@ -44,7 +42,7 @@ AIRLY_API_URL_TEMPLATE = (
 )
 
 # Air quality configuration
-CAQI_BINS: List[int] = [20, 35, 50, 75, 100, 125]
+CAQI_BINS: list[int] = [20, 35, 50, 75, 100, 125]
 PM25_MAX_THRESHOLD = 25.0  # WHO 24h guideline (µg/m³)
 PM10_MAX_THRESHOLD = 50.0  # WHO 24h guideline (µg/m³)
 
