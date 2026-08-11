@@ -1,13 +1,13 @@
 # meteo-to-kindle
-Fetches image from meteo and manipulates it to be properly displayed on e-ink
 
-This script feches image with weather forecast from meteo.pl.
-## ONLY FOR POLAND
-and outputs it in Kindle-friendly format.
+Fetches a weather forecast image from meteo.pl (**Poland only**), overlays
+current air quality data from Airly, and converts it into a Kindle-friendly format.
 
-The kindle launches download of the image and displays it.
-If battery leves drops down below 5% displays warning to charge the device.
+The Kindle downloads the image and displays it on its e-ink screen.
+If the battery level drops below 30%, it also displays a warning to charge
+the device; below 10% it shows the warning and puts itself to sleep.
 
-The jobs are triggered by crontab. I'm using Raspberry Pi Zero W as a host and Lacie NAS as a storage.
+The jobs are triggered by crontab. I'm using a Raspberry Pi Zero W as the host
+and a LaCie NAS for storage.
 
-![alt text](https://github.com/cielke/meteo-to-kindle/raw/master/20180508_162118.jpg)
+![Kindle displaying the weather forecast](https://github.com/cielke/meteo-to-kindle/raw/master/20180508_162118.jpg)
