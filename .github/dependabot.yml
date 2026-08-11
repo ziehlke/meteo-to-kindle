@@ -1,0 +1,23 @@
+# Dependabot configuration: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+updates:
+  # Keep Python dependencies (pyproject.toml + uv.lock) up to date.
+  # Security alerts keep working on their own; this adds scheduled
+  # upgrade PRs for everything else.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    # Group all dependency bumps into a single PR instead of one PR
+    # per package.
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+
+  # Keep the CI workflow actions up to date too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
