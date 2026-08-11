@@ -8,6 +8,9 @@
 - Lint: `uv run ruff check .` (strict rule sets in `pyproject.toml` under `[tool.ruff.lint]`; `--fix` auto-fixes what it can)
 - Format: `uv run ruff format .` (CI enforces it via `uv run ruff format --check .`)
 - Type check: `uv run pyrefly check` (strict preset, configured in `pyproject.toml` under `[tool.pyrefly]`)
+- Vulnerability check: `uv audit --preview-features audit-command`
+- Interpreter: pinned via `.python-version` (3.12, the minimum from `requires-python`) - uv auto-uses it
+- Secrets: `AIRLY_KEY` in `.env` (git-ignored); documented template in `.env.example`
 - Dependencies defined in `pyproject.toml` (dev tools in the `dev` dependency group), exact versions pinned in `uv.lock`
 - Dependabot (`.github/dependabot.yml`) opens grouped upgrade PRs weekly; CI (`.github/workflows/ci.yml`) runs ruff + pytest on every PR
 
