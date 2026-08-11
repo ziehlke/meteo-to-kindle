@@ -10,3 +10,20 @@ dependencies = [
     "numpy",
     "python-dotenv",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "respx",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["airly", "config", "get_image", "image_processor"]
+
+[tool.coverage.report]
+exclude_also = ["if __name__ == .__main__.:"]
