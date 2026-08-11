@@ -28,6 +28,7 @@ def fetch_weather_image(url: str, max_retries: int = 3) -> Image.Image:
     Downloads the image directly into memory without saving to disk.
     Returns a PIL Image object in RGB format.
     """
+    error: OSError | httpx.HTTPError | None = None
     with httpx.Client(follow_redirects=True) as client:
         for attempt in range(1, max_retries + 1):
             try:
@@ -36,22 +37,25 @@ def fetch_weather_image(url: str, max_retries: int = 3) -> Image.Image:
                 with Image.open(BytesIO(response.content)) as img:
                     return img.convert("RGB")
             except (OSError, httpx.HTTPError) as e:
-                if attempt == max_retries:
-                    raise RuntimeError(
-                        f"Failed to download weather image after {max_retries} attempts: {e}"
-                    ) from e
-                print(
-                    f"\nDownload failed (attempt {attempt}/{max_retries}), "
-                    f"retrying in {RETRY_DELAY_SECONDS} seconds...\n"
-                )
-                sleep(RETRY_DELAY_SECONDS)
+                error = e
+                if attempt < max_retries:
+                    print(
+                        f"\nDownload failed (attempt {attempt}/{max_retries}), "
+                        f"retrying in {RETRY_DELAY_SECONDS} seconds...\n"
+                    )
+                    sleep(RETRY_DELAY_SECONDS)
+    raise RuntimeError(
+        f"Failed to download weather image after {max_retries} attempts: {error}"
+    ) from error
 
 
 def publish_to_share(output: Path, share_path: Path) -> None:
     """Compress the output PNG with pngcrush and copy it to the SMB share."""
-    if shutil.which("pngcrush") is None:
+    pngcrush = shutil.which("pngcrush")
+    if pngcrush is None:
         return
-    subprocess.run(["pngcrush", "-c", "0", str(output)], check=True)
+    # fixed argument list, shell=False
+    subprocess.run([pngcrush, "-c", "0", str(output)], check=True)  # noqa: S603
     Path("pngout.png").replace(share_path / "pngout.png")
 
 

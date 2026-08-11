@@ -11,7 +11,6 @@ from PIL import Image
 
 import airly
 import get_image
-from get_image import fetch_weather_image, publish_to_share
 from config import (
     AIRLY_API_URL_TEMPLATE,
     AIRLY_LATITUDE,
@@ -20,6 +19,7 @@ from config import (
     RETRY_DELAY_SECONDS,
     WEATHER_URL_TEMPLATE,
 )
+from get_image import fetch_weather_image, publish_to_share
 
 METEO_URL = WEATHER_URL_TEMPLATE.format(row=KRAKOW_COORDS[0], col=KRAKOW_COORDS[1])
 AIRLY_URL = AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
