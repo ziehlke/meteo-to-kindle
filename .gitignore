@@ -107,10 +107,10 @@ venv.bak/
 
 #
 /client-kindle/.*
+/client-kindle/credentials
 
 .idea
 .airly
 weather-script-output.png
 caqi.png
 template.png
-
