@@ -1,6 +1,5 @@
 """Tests for get_image: downloading with retries, publishing, full pipeline."""
 
-import shutil
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -10,9 +9,10 @@ import pytest
 import respx
 from PIL import Image
 
-import airly
-import get_image
-from config import (
+import meteo_to_kindle.airly as airly
+import meteo_to_kindle.cli as get_image
+from meteo_to_kindle.cli import fetch_weather_image, publish_to_share
+from meteo_to_kindle.config import (
     AIRLY_API_URL_TEMPLATE,
     AIRLY_LATITUDE,
     AIRLY_LONGITUDE,
@@ -20,7 +20,6 @@ from config import (
     RETRY_DELAY_SECONDS,
     WEATHER_URL_TEMPLATE,
 )
-from get_image import fetch_weather_image, publish_to_share
 
 METEO_URL = WEATHER_URL_TEMPLATE.format(row=KRAKOW_COORDS[0], col=KRAKOW_COORDS[1])
 AIRLY_URL = AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
@@ -122,7 +121,7 @@ def test_publish_crushes_and_moves_to_share(
 ) -> None:
     monkeypatch.setattr(get_image.shutil, "which", _found_pngcrush)
 
-    def fake_run(cmd: list[str], check: bool) -> None:
+    def fake_run(cmd: list[str], check: bool, cwd: Path) -> None:
         Path("pngout.png").write_bytes(b"crushed")  # pngcrush's output file
 
     monkeypatch.setattr(get_image.subprocess, "run", fake_run)
@@ -146,9 +145,8 @@ def test_main_end_to_end_offline(
     monkeypatch.setattr(get_image.shutil, "which", _no_pngcrush)
 
     # Redirect all generated files into a temp directory
-    shutil.copy(airly.HOME_DIR / "master_template.png", tmp_path)
-    monkeypatch.setattr(airly, "HOME_DIR", tmp_path)
-    monkeypatch.setattr(get_image, "HOME_DIR", tmp_path)
+    monkeypatch.setattr(airly, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(get_image, "OUTPUT_DIR", tmp_path)
 
     respx.get(AIRLY_URL).mock(return_value=httpx.Response(200, json=AIRLY_PAYLOAD))
     respx.get(METEO_URL).mock(

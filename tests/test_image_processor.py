@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from image_processor import Box, WeatherImageProcessor
+from meteo_to_kindle.image_processor import Box, WeatherImageProcessor
 
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
@@ -36,7 +36,7 @@ def test_crop_image_moves_sections_and_crops(tmp_path: Path) -> None:
     img = _solid(METEOGRAM_SIZE, BLUE)
     img.paste(_solid((600, 757 - 646), RED), (0, 646))
 
-    processor = WeatherImageProcessor(home_dir=tmp_path)
+    processor = WeatherImageProcessor(output_dir=tmp_path)
     result = processor.crop_image(img)
 
     # Final crop (35, 122, -40, 547) of 600x757
@@ -62,7 +62,7 @@ def test_remove_logo_replaces_exact_colors_only(tmp_path: Path) -> None:
     ]
     img.putdata(pixels)
 
-    processor = WeatherImageProcessor(home_dir=tmp_path)
+    processor = WeatherImageProcessor(output_dir=tmp_path)
     result = processor.remove_logo(img)
 
     expected = [
@@ -81,7 +81,7 @@ def test_adjust_size_resizes_and_pastes_onto_template(tmp_path: Path) -> None:
     template.save(tmp_path / "template.png")
     weather = _solid((525, 425), RED)
 
-    processor = WeatherImageProcessor(home_dir=tmp_path)
+    processor = WeatherImageProcessor(output_dir=tmp_path)
     result = processor.adjust_size(weather)
 
     assert result.size == (600, 800)
@@ -96,7 +96,7 @@ def test_paste_caqi_draws_chart_without_mutating_input(tmp_path: Path) -> None:
     caqi.save(tmp_path / "caqi.png")
     base = _solid((600, 800), BLUE)
 
-    processor = WeatherImageProcessor(home_dir=tmp_path)
+    processor = WeatherImageProcessor(output_dir=tmp_path)
     result = processor.paste_caqi(base)
 
     assert result.getpixel((10, 510)) == GREEN  # chart pasted at (0, 500)

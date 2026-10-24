@@ -1,9 +1,15 @@
 """Configuration constants for the meteo-to-kindle application."""
 
+import os
 from pathlib import Path
 
-# Directory configuration
-HOME_DIR = Path(__file__).parent
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Bundled assets are read-only; generated files go to the configured output dir.
+ASSET_DIR = Path(__file__).parent / "assets"
+OUTPUT_DIR = Path(os.environ.get("METEO_OUTPUT_DIR", Path.cwd())).expanduser().resolve()
 
 # Weather service configuration
 KRAKOW_COORDS: tuple[int, int] = (466, 232)
@@ -18,14 +24,16 @@ CAQI_FILENAME = "caqi.png"
 TEMPLATE_PROCESSED_FILENAME = "template.png"
 
 # Font paths
-FONT_DIR = HOME_DIR / "Manrope"
+FONT_DIR = ASSET_DIR / "Manrope"
 EMOJI_FONT_PATH = FONT_DIR / "OpenMoji-Black.ttf"
 EXTRA_BOLD_FONT_PATH = FONT_DIR / "Manrope-ExtraBold.ttf"
 BOLD_FONT_PATH = FONT_DIR / "Manrope-Bold.ttf"
 REGULAR_FONT_PATH = FONT_DIR / "Manrope-Regular.ttf"
 
 # Output configuration
-SMB_SHARE_PATH = Path("/home/dietpi/").resolve()
+SMB_SHARE_PATH = (
+    Path(os.environ.get("METEO_SHARE_PATH", "/home/dietpi")).expanduser().resolve()
+)
 
 # Retry configuration
 RETRY_DELAY_SECONDS = 15

@@ -1,6 +1,5 @@
 """Tests for airly: API fetching, value parsing and template rendering."""
 
-import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -10,9 +9,9 @@ import pytest
 import respx
 from PIL.ImageFont import FreeTypeFont
 
-import airly
-from airly import Airly, _percent
-from config import (
+import meteo_to_kindle.airly as airly
+from meteo_to_kindle.airly import Airly, _percent
+from meteo_to_kindle.config import (
     ADVICE_POSITION,
     AIRLY_API_URL_TEMPLATE,
     AIRLY_LATITUDE,
@@ -130,8 +129,7 @@ def rendered_template(
     """Run fill_template with a recording draw object and return its calls."""
 
     def render(payload: dict[str, Any]) -> list[dict[str, Any]]:
-        shutil.copy(airly.HOME_DIR / "master_template.png", tmp_path)
-        monkeypatch.setattr(airly, "HOME_DIR", tmp_path)
+        monkeypatch.setattr(airly, "OUTPUT_DIR", tmp_path)
         recorder = RecordingDraw()
 
         def fake_draw(_image: object) -> RecordingDraw:
@@ -193,7 +191,7 @@ def test_fill_template_picks_emoji_by_caqi(
 def test_plot_caqi_history_saves_chart(
     airly_client: Airly, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(airly, "HOME_DIR", tmp_path)
+    monkeypatch.setattr(airly, "OUTPUT_DIR", tmp_path)
     airly_client._data = PAYLOAD
     airly_client.plot_caqi_history()
     assert (tmp_path / "caqi.png").exists()

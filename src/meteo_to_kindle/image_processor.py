@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from config import (
+from .config import (
     CAQI_CHART_POSITION,
     CAQI_FILENAME,
     CROP_OPERATIONS,
@@ -26,9 +26,9 @@ Box = tuple[int | None, int | None, int | None, int | None]
 class WeatherImageProcessor:
     """Handles image processing operations for weather data."""
 
-    def __init__(self, home_dir: Path):
-        """Initialize with home directory path."""
-        self.home_dir = home_dir
+    def __init__(self, output_dir: Path):
+        """Initialize with the directory for generated intermediate files."""
+        self.output_dir = output_dir
 
     def crop_image(self, image: Image.Image) -> Image.Image:
         """Rearrange sections of the meteogram and crop it to the content area."""
@@ -64,7 +64,7 @@ class WeatherImageProcessor:
         resized = image.resize(
             (TARGET_IMAGE_WIDTH, new_height), Image.Resampling.LANCZOS
         )
-        with Image.open(self.home_dir / TEMPLATE_PROCESSED_FILENAME) as template:
+        with Image.open(self.output_dir / TEMPLATE_PROCESSED_FILENAME) as template:
             result = template.copy()
         result.paste(resized, (0, 0))
         return result
@@ -72,7 +72,7 @@ class WeatherImageProcessor:
     def paste_caqi(self, image: Image.Image) -> Image.Image:
         """Paste the CAQI history chart onto the image."""
         result = image.copy()
-        with Image.open(self.home_dir / CAQI_FILENAME) as caqi:
+        with Image.open(self.output_dir / CAQI_FILENAME) as caqi:
             result.paste(caqi, CAQI_CHART_POSITION)
         return result
 

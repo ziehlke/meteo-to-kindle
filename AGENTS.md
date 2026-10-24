@@ -2,7 +2,7 @@
 
 ## Build/Test Commands
 - Install dependencies: `uv sync`
-- Run main script: `uv run get_image.py`
+- Run main script: `uv run meteo-to-kindle`
 - Run tests: `uv run pytest` (with coverage: `uv run pytest --cov --cov-report=term-missing`)
 - Tests live in `tests/`, network calls are mocked with respx, image assertions use synthetic PIL images
 - Lint: `uv run ruff check .` (strict rule sets in `pyproject.toml` under `[tool.ruff.lint]`; `--fix` auto-fixes what it can)

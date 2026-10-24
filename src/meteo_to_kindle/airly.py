@@ -12,17 +12,17 @@ import matplotlib
 matplotlib.use("Agg")  # headless backend, must be set before importing pyplot
 
 import matplotlib.pyplot as plt
-from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageFont import FreeTypeFont
 
-from config import (
+from .config import (
     ADVICE_POSITION,
     ADVICE_WRAP_WIDTH,
     AIR_QUALITY_EMOJIS,
     AIRLY_API_URL_TEMPLATE,
     AIRLY_LATITUDE,
     AIRLY_LONGITUDE,
+    ASSET_DIR,
     BOLD_FONT_PATH,
     BOLD_SMALL_FONT_SIZE,
     CAQI_BINS,
@@ -35,8 +35,8 @@ from config import (
     EMOJI_POSITION,
     EXTRA_BOLD_FONT_PATH,
     EXTRA_BOLD_FONT_SIZE,
-    HOME_DIR,
     HUMIDITY_POSITION,
+    OUTPUT_DIR,
     PM1_POSITION,
     PM10_MAX_THRESHOLD,
     PM10_PERCENT_POSITION,
@@ -50,8 +50,6 @@ from config import (
     TEMPLATE_FILENAME,
     TEMPLATE_PROCESSED_FILENAME,
 )
-
-load_dotenv()
 
 
 @dataclass(frozen=True)
@@ -129,7 +127,8 @@ class Airly:
         try:
             ax.bar(x_pos, caqis, color=colors, width=CHART_BAR_WIDTH)
             ax.set_xticks(x_pos, hours)
-            fig.savefig(HOME_DIR / CAQI_FILENAME, bbox_inches="tight")
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            fig.savefig(OUTPUT_DIR / CAQI_FILENAME, bbox_inches="tight")
         finally:
             plt.close(fig)
 
@@ -180,11 +179,12 @@ class Airly:
             (ADVICE_POSITION, advice, fonts.regular_small, "black"),
         ]
 
-        with Image.open(HOME_DIR / TEMPLATE_FILENAME) as image:
+        with Image.open(ASSET_DIR / TEMPLATE_FILENAME) as image:
             draw = ImageDraw.Draw(image)
             for position, text, font, fill in content:
                 draw.text(position, text, fill=fill, font=font)
-            image.save(HOME_DIR / TEMPLATE_PROCESSED_FILENAME)
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            image.save(OUTPUT_DIR / TEMPLATE_PROCESSED_FILENAME)
 
 
 def _percent(value: float, threshold: float) -> str:

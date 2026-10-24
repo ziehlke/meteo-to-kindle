@@ -8,9 +8,17 @@ LOG="$SCRIPTDIR/$NAME.log"
 LIMG="$SCRIPTDIR/weather-script-output.png"
 LIMGERR="$SCRIPTDIR/weather-error.png"
 LIMGBATT="$SCRIPTDIR/weather-battery.png"
+CONFIG="/var/local/meteo-to-kindle/credentials"
 
 RIMG="192.168.1.125/OpenShare/weather/weather-script-output.png"
 
+if [ ! -r "$CONFIG" ]; then
+  echo "Missing readable credentials file: $CONFIG" >&2
+  exit 1
+fi
+. "$CONFIG"
+: "${FTP_USER:?FTP_USER must be set in $CONFIG}"
+: "${FTP_PASSWORD:?FTP_PASSWORD must be set in $CONFIG}"
 
 echo "================================================"                                          >> $LOG 2>&1
 ### Check Batterystate
@@ -35,7 +43,7 @@ fi
 
 lipc-set-prop com.lab126.powerd preventScreenSaver 1   #prevent screenSaver On
 rm $LIMG
-if wget -q "ftp://REDACTED_CREDENTIALS@$RIMG" -O "$LIMG"; then
+if wget -q "ftp://${FTP_USER}:${FTP_PASSWORD}@${RIMG}" -O "$LIMG"; then
   eips -f -g "$LIMG"
   echo "`date '+%Y-%m-%d_%H:%M:%S'` | New image downaloded and displayed"                          >> $LOG 2>&1
 else

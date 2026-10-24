@@ -9,17 +9,17 @@ from time import sleep
 import httpx
 from PIL import Image
 
-from airly import Airly
-from config import (
-    HOME_DIR,
+from .airly import Airly
+from .config import (
     IMAGE_BITS,
     KRAKOW_COORDS,
+    OUTPUT_DIR,
     OUTPUT_FILENAME,
     RETRY_DELAY_SECONDS,
     SMB_SHARE_PATH,
     WEATHER_URL_TEMPLATE,
 )
-from image_processor import WeatherImageProcessor
+from .image_processor import WeatherImageProcessor
 
 
 def fetch_weather_image(url: str, max_retries: int = 3) -> Image.Image:
@@ -55,8 +55,8 @@ def publish_to_share(output: Path, share_path: Path) -> None:
     if pngcrush is None:
         return
     # fixed argument list, shell=False
-    subprocess.run([pngcrush, "-c", "0", str(output)], check=True)  # noqa: S603
-    Path("pngout.png").replace(share_path / "pngout.png")
+    subprocess.run([pngcrush, "-c", "0", str(output)], check=True, cwd=output.parent)  # noqa: S603
+    (output.parent / "pngout.png").replace(share_path / "pngout.png")
 
 
 def main() -> None:
@@ -68,14 +68,15 @@ def main() -> None:
 
     # Download and process weather image
     url = WEATHER_URL_TEMPLATE.format(row=KRAKOW_COORDS[0], col=KRAKOW_COORDS[1])
-    processor = WeatherImageProcessor(HOME_DIR)
+    processor = WeatherImageProcessor(OUTPUT_DIR)
     image = fetch_weather_image(url)
     image = processor.crop_image(image)
     image = processor.remove_logo(image)
     image = processor.adjust_size(image)
     image = processor.paste_caqi(image)
 
-    output = HOME_DIR / OUTPUT_FILENAME
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output = OUTPUT_DIR / OUTPUT_FILENAME
     image.save(output, bits=IMAGE_BITS)
 
     publish_to_share(output, SMB_SHARE_PATH)

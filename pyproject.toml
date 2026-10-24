@@ -11,6 +11,13 @@ dependencies = [
     "python-dotenv",
 ]
 
+[project.scripts]
+meteo-to-kindle = "meteo_to_kindle.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
+
 [dependency-groups]
 dev = [
     "pyrefly",
@@ -50,12 +57,13 @@ python-version = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
 # Treat warnings as errors: dependency deprecations surface on upgrades
 filterwarnings = ["error"]
 
 [tool.coverage.run]
-source = ["airly", "config", "get_image", "image_processor"]
+source = ["meteo_to_kindle"]
+omit = ["*/__main__.py"]
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
