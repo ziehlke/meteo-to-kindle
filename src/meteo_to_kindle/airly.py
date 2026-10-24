@@ -62,7 +62,7 @@ class Fonts:
     regular_small: FreeTypeFont
 
     @classmethod
-    def load(cls) -> "Fonts":
+    def load(cls) -> Fonts:
         return cls(
             emoji=ImageFont.truetype(EMOJI_FONT_PATH, EMOJI_FONT_SIZE),
             extra_bold=ImageFont.truetype(EXTRA_BOLD_FONT_PATH, EXTRA_BOLD_FONT_SIZE),

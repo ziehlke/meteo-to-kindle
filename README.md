@@ -13,7 +13,7 @@ and a LaCie NAS for storage.
 ## Install and run
 
 This is an installable Python application. On the Raspberry Pi, install Python
-3.12+, `uv`, and `pngcrush` (optional; used to compress the published image),
+3.14+, `uv`, and `pngcrush` (optional; used to compress the published image),
 then run:
 
 ```sh
