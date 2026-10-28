@@ -11,6 +11,11 @@ load_dotenv()
 ASSET_DIR = Path(__file__).parent / "assets"
 OUTPUT_DIR = Path(os.environ.get("METEO_OUTPUT_DIR", Path.cwd())).expanduser().resolve()
 
+# Meteo ICM API configuration (the data source powering app.meteo.pl).
+# The legacy meteogram image endpoint now serves an advertisement instead.
+METEO_API_BASE = "https://devmgramapi.meteo.pl"
+METEO_MODEL = os.environ.get("METEO_MODEL", "um4_60")
+
 # Weather service configuration
 KRAKOW_COORDS: tuple[int, int] = (466, 232)
 WEATHER_URL_TEMPLATE = (
