@@ -15,6 +15,12 @@ OUTPUT_DIR = Path(os.environ.get("METEO_OUTPUT_DIR", Path.cwd())).expanduser().r
 # The legacy meteogram image endpoint now serves an advertisement instead.
 METEO_API_BASE = "https://devmgramapi.meteo.pl"
 METEO_MODEL = os.environ.get("METEO_MODEL", "um4_60")
+TIMEZONE_NAME = "Europe/Warsaw"
+
+# Meteogram rendering
+METEOGRAM_FIGSIZE = (6, 5)  # 600x500 px at METEOGRAM_DPI
+METEOGRAM_DPI = 100
+METEOGRAM_FILENAME = "meteogram.png"
 
 # Weather service configuration
 KRAKOW_COORDS: tuple[int, int] = (466, 232)
