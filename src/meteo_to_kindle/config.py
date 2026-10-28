@@ -22,12 +22,6 @@ METEOGRAM_FIGSIZE = (6, 5)  # 600x500 px at METEOGRAM_DPI
 METEOGRAM_DPI = 100
 METEOGRAM_FILENAME = "meteogram.png"
 
-# Weather service configuration
-KRAKOW_COORDS: tuple[int, int] = (466, 232)
-WEATHER_URL_TEMPLATE = (
-    "http://www.meteo.pl/um/metco/mgram_pict.php?ntype=0u&row={row}&col={col}&lang=pl"
-)
-
 # File paths
 OUTPUT_FILENAME = "weather-script-output.png"
 TEMPLATE_FILENAME = "master_template.png"
@@ -93,18 +87,5 @@ REGULAR_SMALL_FONT_SIZE = 15
 # Text formatting
 ADVICE_WRAP_WIDTH = 45
 
-# Image crop coordinates
-CROP_OPERATIONS = [
-    ((0, 646, None, 757), (0, 522, None, 633)),
-    ((0, 434, None, 633), (0, 348, None, 547)),
-]
-FINAL_CROP_COORDS = (35, 122, -40, 547)
-
 # CAQI chart position
 CAQI_CHART_POSITION = (0, 500)
-
-# Color replacement for logo removal
-WHITE_COLORS_TO_REPLACE = [(255, 251, 240), (244, 244, 244)]
-GRAY_COLORS_TO_REPLACE = [(216, 216, 216), (215, 216, 215)]
-WHITE_TARGET_COLOR = (255, 255, 255)
-GRAY_TARGET_COLOR = (226, 226, 226)

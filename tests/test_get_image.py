@@ -1,6 +1,5 @@
-"""Tests for get_image: downloading with retries, publishing, full pipeline."""
+"""Tests for the main pipeline: full offline run and publishing."""
 
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -11,18 +10,61 @@ from PIL import Image
 
 import meteo_to_kindle.airly as airly
 import meteo_to_kindle.cli as get_image
-from meteo_to_kindle.cli import fetch_weather_image, publish_to_share
+from meteo_to_kindle.cli import publish_to_share
 from meteo_to_kindle.config import (
     AIRLY_API_URL_TEMPLATE,
     AIRLY_LATITUDE,
     AIRLY_LONGITUDE,
-    KRAKOW_COORDS,
-    RETRY_DELAY_SECONDS,
-    WEATHER_URL_TEMPLATE,
+    METEO_API_BASE,
+    METEO_MODEL,
 )
 
-METEO_URL = WEATHER_URL_TEMPLATE.format(row=KRAKOW_COORDS[0], col=KRAKOW_COORDS[1])
 AIRLY_URL = AIRLY_API_URL_TEMPLATE.format(lat=AIRLY_LATITUDE, lng=AIRLY_LONGITUDE)
+AVAILABLE_URL = f"{METEO_API_BASE}/meteorograms/available"
+RUN_URL = f"{METEO_API_BASE}/meteorograms/{METEO_MODEL}"
+
+METEO_POINT: dict[str, Any] = {
+    "lat": 50.07,
+    "lon": 20.05,
+    "grid": "P5",
+    "row": 151,
+    "col": 236,
+}
+
+
+def _series(values: list[float]) -> dict[str, Any]:
+    return {"data": values, "interval": 3600, "unit": "x", "point": METEO_POINT}
+
+
+METEO_AVAILABLE: dict[str, Any] = {
+    "um4_60": [1793059200],
+    "um4_120": [],
+    "gfs": [],
+}
+
+METEO_RUN: dict[str, Any] = {
+    "fstart": "2026-10-26T12:00:00Z",
+    "data": {
+        "airtmp_point": _series([10.5, 9.0, 8.0, 7.5, 9.0, 12.0]),
+        "airtmp_min": _series([10.0, 8.5, 7.5, 7.0, 8.5, 11.5]),
+        "airtmp_max": _series([11.0, 9.5, 8.5, 8.0, 9.5, 12.5]),
+        "dwptmp_point": _series([8.0, 7.5, 7.0, 6.5, 7.0, 8.5]),
+        "slpres_point": _series([101_000, 101_100, 101_200, 101_300, 101_400, 101_500]),
+        "pcpttl_max": _series([0.0, 0.5, 2.0, 0.0, 0.0, 0.0]),
+        "pcpttlprob_point": _series([10.0, 50.0, 80.0, 30.0, 10.0, 5.0]),
+        "pcpttl_type_max": _series([0.0, 1.0, 2.0, 0.0, 0.0, 0.0]),
+        "storm_max": _series([0.0, 0.0, 2.0, 0.0, 0.0, 0.0]),
+        "wind10_sd_true_prev_point": _series([3.0, 4.0, 5.0, 4.5, 3.5, 2.5]),
+        "wind_gust_max": _series([7.0, 9.0, 11.0, 10.0, 8.0, 6.0]),
+        "wind10_dr_deg_true_prev_point": _series(
+            [270.0, 280.0, 290.0, 300.0, 310.0, 320.0]
+        ),
+        "cldvlow_aver": _series([0.0, 0.1, 0.2, 0.1, 0.0, 0.0]),
+        "cldlow_aver": _series([0.4, 0.5, 0.8, 0.6, 0.3, 0.1]),
+        "cldmed_aver": _series([0.3, 0.4, 0.5, 0.4, 0.2, 0.1]),
+        "cldhigh_aver": _series([0.1, 0.2, 0.3, 0.2, 0.1, 0.0]),
+    },
+}
 
 AIRLY_PAYLOAD: dict[str, Any] = {
     "current": {
@@ -44,14 +86,6 @@ AIRLY_PAYLOAD: dict[str, Any] = {
 }
 
 
-def _png_bytes(
-    size: tuple[int, int], color: tuple[int, int, int] = (255, 255, 255)
-) -> bytes:
-    buffer = BytesIO()
-    Image.new("RGB", size, color).save(buffer, format="PNG")
-    return buffer.getvalue()
-
-
 def _no_pngcrush(_name: str) -> None:
     return None
 
@@ -60,45 +94,35 @@ def _found_pngcrush(_name: str) -> str:
     return "/usr/bin/pngcrush"
 
 
-@pytest.fixture
-def fast_sleep(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Replace the real sleep with a recorder so tests don't wait."""
-    calls: list[float] = []
-    monkeypatch.setattr(get_image, "sleep", calls.append)
-    return calls
+# ------------------------------------------------------------------- main
 
 
 @respx.mock
-def test_fetch_weather_image_success() -> None:
-    respx.get(METEO_URL).mock(
-        return_value=httpx.Response(200, content=_png_bytes((8, 8)))
-    )
-    image = fetch_weather_image(METEO_URL)
-    assert image.mode == "RGB"
-    assert image.size == (8, 8)
-
-
-@respx.mock
-def test_fetch_weather_image_retries_then_succeeds(fast_sleep: list[float]) -> None:
-    respx.get(METEO_URL).mock(
-        side_effect=[
-            httpx.Response(500),
-            httpx.Response(200, content=_png_bytes((8, 8))),
-        ]
-    )
-    image = fetch_weather_image(METEO_URL)
-    assert image.size == (8, 8)
-    assert fast_sleep == [RETRY_DELAY_SECONDS]
-
-
-@respx.mock
-def test_fetch_weather_image_gives_up_after_max_retries(
-    fast_sleep: list[float],
+def test_main_end_to_end_offline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    respx.get(METEO_URL).mock(return_value=httpx.Response(500))
-    with pytest.raises(RuntimeError, match="after 3 attempts"):
-        fetch_weather_image(METEO_URL)
-    assert fast_sleep == [RETRY_DELAY_SECONDS, RETRY_DELAY_SECONDS]
+    monkeypatch.setenv("AIRLY_KEY", "test-key")
+    monkeypatch.setattr(get_image.shutil, "which", _no_pngcrush)
+
+    # Redirect all generated files into a temp directory
+    monkeypatch.setattr(airly, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(get_image, "OUTPUT_DIR", tmp_path)
+
+    respx.get(AIRLY_URL).mock(return_value=httpx.Response(200, json=AIRLY_PAYLOAD))
+    respx.get(AVAILABLE_URL).mock(
+        return_value=httpx.Response(200, json=METEO_AVAILABLE)
+    )
+    respx.post(RUN_URL).mock(return_value=httpx.Response(200, json=METEO_RUN))
+
+    get_image.main()
+
+    assert (tmp_path / "template.png").exists()
+    assert (tmp_path / "caqi.png").exists()
+    assert (tmp_path / "meteogram.png").exists()
+    output = tmp_path / "weather-script-output.png"
+    with Image.open(output) as result:
+        assert result.size == (600, 800)
+        assert result.mode == "L"  # kindle grayscale
 
 
 # --------------------------------------------------------------- publishing
@@ -132,32 +156,3 @@ def test_publish_crushes_and_moves_to_share(
     publish_to_share(Path("out.png"), share)
 
     assert (share / "pngout.png").read_bytes() == b"crushed"
-
-
-# ------------------------------------------------------------------- main
-
-
-@respx.mock
-def test_main_end_to_end_offline(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("AIRLY_KEY", "test-key")
-    monkeypatch.setattr(get_image.shutil, "which", _no_pngcrush)
-
-    # Redirect all generated files into a temp directory
-    monkeypatch.setattr(airly, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(get_image, "OUTPUT_DIR", tmp_path)
-
-    respx.get(AIRLY_URL).mock(return_value=httpx.Response(200, json=AIRLY_PAYLOAD))
-    respx.get(METEO_URL).mock(
-        return_value=httpx.Response(200, content=_png_bytes((600, 757)))
-    )
-
-    get_image.main()
-
-    assert (tmp_path / "template.png").exists()
-    assert (tmp_path / "caqi.png").exists()
-    output = tmp_path / "weather-script-output.png"
-    with Image.open(output) as result:
-        assert result.size == (600, 800)
-        assert result.mode == "L"  # kindle grayscale
