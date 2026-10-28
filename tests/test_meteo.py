@@ -144,9 +144,27 @@ def test_fetch_retries_invalid_json(fast_sleep: list[float]) -> None:
 def test_clean_accepts_finite_and_drops_missing() -> None:
     assert _clean(None) is None
     assert _clean(7.25) == 7.25
+    assert _clean("n/a") is None
+    assert _clean("3.5") == 3.5
     assert _clean(float("nan")) is None
     assert _clean(float("inf")) is None
     assert _clean(-3.27e8) is None
+
+
+@respx.mock
+def test_fetch_raises_on_malformed_available_response() -> None:
+    respx.get(AVAILABLE_URL).mock(
+        side_effect=[
+            httpx.Response(200, json=[1, 2, 3]),
+            httpx.Response(200, json={"um4_60": "soon"}),
+            httpx.Response(200, json={"um4_60": []}),
+        ]
+    )
+
+    client = MeteoClient()
+    for _ in range(3):
+        with pytest.raises(RuntimeError, match="No runs available for model 'um4_60'"):
+            client.fetch()
 
 
 def test_parse_raises_without_series_data() -> None:
@@ -154,6 +172,23 @@ def test_parse_raises_without_series_data() -> None:
         _parse("um4_60", {"fstart": "2026-10-26T12:00:00Z"})
     with pytest.raises(RuntimeError, match="no series data"):
         _parse("um4_60", {"fstart": "2026-10-26T12:00:00Z", "data": {"a": "junk"}})
+
+
+def test_parse_raises_on_malformed_payload() -> None:
+    with pytest.raises(RuntimeError, match="no series data"):
+        _parse("um4_60", ["not", "a", "dict"])
+
+
+def test_parse_raises_for_invalid_interval() -> None:
+    for interval in (None, 0, -3600, "soon"):
+        series = _series([1.0])
+        if interval is None:
+            del series["interval"]
+        else:
+            series["interval"] = interval
+        payload = {"fstart": "2026-10-26T12:00:00Z", "data": {"a": series}}
+        with pytest.raises(RuntimeError, match="no valid series interval"):
+            _parse("um4_60", payload)
 
 
 def test_parse_raises_when_series_has_no_data() -> None:
@@ -191,6 +226,14 @@ def test_parse_raises_for_missing_point() -> None:
                 "data": {"a": {"data": [1.0], "interval": 3600}},
             },
         )
+
+
+def test_parse_raises_for_invalid_point_values() -> None:
+    series = _series([1.0])
+    series["point"] = {"lat": "n/a", "lon": 20.05}
+    payload = {"fstart": "2026-10-26T12:00:00Z", "data": {"a": series}}
+    with pytest.raises(RuntimeError, match="invalid point coordinates"):
+        _parse("um4_60", payload)
 
 
 def test_parse_pads_uneven_series_to_reference_length() -> None:

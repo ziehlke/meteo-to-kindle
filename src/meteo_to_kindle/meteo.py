@@ -30,10 +30,13 @@ _FILL_THRESHOLD = 1e6
 
 
 def _clean(value: Any) -> float | None:
-    """Normalize one data point: keep finite floats, drop NaN/fill codes."""
+    """Normalize one data point: keep finite numbers, drop everything else."""
     if value is None:
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except TypeError, ValueError:
+        return None  # junk like "n/a" counts as missing
     if math.isnan(number) or math.isinf(number) or abs(number) > _FILL_THRESHOLD:
         return None
     return number
@@ -80,8 +83,8 @@ class MeteoClient:
     def _fetch_available(self) -> int:
         """Return the newest model run timestamp currently available."""
         data = self._request("GET", "/meteorograms/available", None, "timestamps")
-        runs = data.get(self._model)
-        if not runs:
+        runs = data.get(self._model) if isinstance(data, dict) else None
+        if not isinstance(runs, list) or not runs:
             raise RuntimeError(f"No runs available for model '{self._model}'")
         return max(runs)
 
@@ -116,9 +119,9 @@ class MeteoClient:
         ) from error
 
 
-def _parse(model: str, payload: dict[str, Any]) -> MeteogramData:
+def _parse(model: str, payload: Any) -> MeteogramData:
     """Turn one API run payload into a MeteogramData object."""
-    raw = payload.get("data")
+    raw = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(raw, dict) or not raw:
         raise RuntimeError("Meteo API returned no series data")
 
@@ -126,7 +129,10 @@ def _parse(model: str, payload: dict[str, Any]) -> MeteogramData:
     if not names:
         raise RuntimeError("Meteo API returned no series data")
     reference = _series_spec(raw, names[0])
-    interval = int(reference["interval"])
+    interval = reference.get("interval")
+    if not isinstance(interval, (int, float)) or interval <= 0:
+        raise RuntimeError("Meteo API returned no valid series interval")
+    step = int(interval)
     start = _parse_start(payload.get("fstart"))
     latitude, longitude = _parse_point(reference.get("point"))
 
@@ -135,7 +141,7 @@ def _parse(model: str, payload: dict[str, Any]) -> MeteogramData:
     series = {
         name: _cleaned_values(_series_spec(raw, name)["data"], count) for name in names
     }
-    timestamps = tuple(start + timedelta(seconds=interval * i) for i in range(count))
+    timestamps = tuple(start + timedelta(seconds=step * i) for i in range(count))
     return MeteogramData(
         model=model,
         start=start,
@@ -150,7 +156,12 @@ def _parse_point(point: Any) -> tuple[float, float]:
     """Extract the model grid point the forecast was resolved to."""
     if not isinstance(point, dict) or "lat" not in point or "lon" not in point:
         raise RuntimeError("Meteo API returned no resolved point")
-    return float(point["lat"]), float(point["lon"])
+    try:
+        return float(point["lat"]), float(point["lon"])
+    except (TypeError, ValueError) as e:
+        raise RuntimeError(
+            f"Meteo API returned invalid point coordinates: {point!r}"
+        ) from e
 
 
 def _series_spec(raw: dict[str, Any], name: str) -> dict[str, Any]:
