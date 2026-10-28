@@ -1,69 +1,28 @@
-"""Image processing utilities for the weather display."""
+"""Compose the final weather display image for the Kindle."""
 
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 
 from .config import (
     CAQI_CHART_POSITION,
     CAQI_FILENAME,
-    CROP_OPERATIONS,
-    FINAL_CROP_COORDS,
-    GRAY_COLORS_TO_REPLACE,
-    GRAY_TARGET_COLOR,
     TARGET_IMAGE_WIDTH,
     TEMPLATE_PROCESSED_FILENAME,
-    WHITE_COLORS_TO_REPLACE,
-    WHITE_TARGET_COLOR,
 )
-
-# A crop box where None means "edge of the image" and negatives count
-# back from that edge, e.g. (35, 122, -40, 547).
-Box = tuple[int | None, int | None, int | None, int | None]
 
 
 class WeatherImageProcessor:
-    """Handles image processing operations for weather data."""
+    """Composes the meteogram and CAQI chart onto the template."""
 
     def __init__(self, output_dir: Path):
         """Initialize with the directory for generated intermediate files."""
         self.output_dir = output_dir
 
-    def crop_image(self, image: Image.Image) -> Image.Image:
-        """Rearrange sections of the meteogram and crop it to the content area."""
-        img = image.copy()
-
-        # Move each source section over its target section
-        for source_box, target_box in CROP_OPERATIONS:
-            section = img.crop(self._resolve_box(source_box, img.size))
-            section.load()
-            img.paste(section, self._resolve_box(target_box, img.size))
-
-        final = img.crop(self._resolve_box(FINAL_CROP_COORDS, img.size))
-        final.load()
-        return final
-
-    def remove_logo(self, image: Image.Image) -> Image.Image:
-        """Remove the logo by replacing its exact colors."""
-        pixels = np.array(image)
-        replacements = [
-            (WHITE_COLORS_TO_REPLACE, WHITE_TARGET_COLOR),
-            (GRAY_COLORS_TO_REPLACE, GRAY_TARGET_COLOR),
-        ]
-        for source_colors, target_color in replacements:
-            for color in source_colors:
-                mask = np.all(pixels == color, axis=-1)
-                pixels[mask] = target_color
-        return Image.fromarray(pixels)
-
-    def adjust_size(self, image: Image.Image) -> Image.Image:
-        """Resize image to the target width and paste it onto the template."""
-        ratio = TARGET_IMAGE_WIDTH / image.size[0]
-        new_height = int(image.size[1] * ratio)
-        resized = image.resize(
-            (TARGET_IMAGE_WIDTH, new_height), Image.Resampling.LANCZOS
-        )
+    def paste_meteogram(self, meteogram_path: Path) -> Image.Image:
+        """Paste the rendered meteogram at the top of the template."""
+        with Image.open(meteogram_path) as meteogram:
+            resized = self._fit_width(meteogram.convert("L"))
         with Image.open(self.output_dir / TEMPLATE_PROCESSED_FILENAME) as template:
             result = template.copy()
         result.paste(resized, (0, 0))
@@ -77,21 +36,9 @@ class WeatherImageProcessor:
         return result
 
     @staticmethod
-    def _resolve_box(box: Box, img_size: tuple[int, int]) -> tuple[int, int, int, int]:
-        """Resolve empty/negative box coordinates to absolute pixel values."""
-        width, height = img_size
-
-        def resolve(value: int | None, axis_max: int) -> int:
-            if value is None:
-                return axis_max
-            if value < 0:
-                return axis_max + value
-            return value
-
-        x1, y1, x2, y2 = box
-        return (
-            resolve(x1, width),
-            resolve(y1, height),
-            resolve(x2, width),
-            resolve(y2, height),
-        )
+    def _fit_width(image: Image.Image) -> Image.Image:
+        """Resize the image to the target width, keeping its aspect ratio."""
+        if image.size[0] == TARGET_IMAGE_WIDTH:
+            return image
+        new_height = int(image.size[1] * TARGET_IMAGE_WIDTH / image.size[0])
+        return image.resize((TARGET_IMAGE_WIDTH, new_height), Image.Resampling.LANCZOS)
