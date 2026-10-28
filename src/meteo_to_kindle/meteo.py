@@ -130,7 +130,12 @@ def _parse(model: str, payload: Any) -> MeteogramData:
         raise RuntimeError("Meteo API returned no series data")
     reference = _series_spec(raw, names[0])
     interval = reference.get("interval")
-    if not isinstance(interval, (int, float)) or interval <= 0:
+    if (
+        not isinstance(interval, (int, float))
+        or not math.isfinite(interval)
+        or interval <= 0
+        or interval != int(interval)  # fractional seconds would collapse to duplicates
+    ):
         raise RuntimeError("Meteo API returned no valid series interval")
     step = int(interval)
     start = _parse_start(payload.get("fstart"))

@@ -180,7 +180,7 @@ def test_parse_raises_on_malformed_payload() -> None:
 
 
 def test_parse_raises_for_invalid_interval() -> None:
-    for interval in (None, 0, -3600, "soon"):
+    for interval in (None, 0, -3600, "soon", 0.5, float("nan")):
         series = _series([1.0])
         if interval is None:
             del series["interval"]
@@ -189,6 +189,16 @@ def test_parse_raises_for_invalid_interval() -> None:
         payload = {"fstart": "2026-10-26T12:00:00Z", "data": {"a": series}}
         with pytest.raises(RuntimeError, match="no valid series interval"):
             _parse("um4_60", payload)
+
+
+def test_parse_accepts_whole_float_interval() -> None:
+    series = _series([1.0, 2.0])
+    series["interval"] = 3600.0
+    data = _parse("um4_60", {"fstart": "2026-10-26T12:00:00Z", "data": {"a": series}})
+    assert data.timestamps == (
+        datetime(2026, 10, 26, 12, tzinfo=UTC),
+        datetime(2026, 10, 26, 13, tzinfo=UTC),
+    )
 
 
 def test_parse_raises_when_series_has_no_data() -> None:
