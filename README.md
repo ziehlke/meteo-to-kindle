@@ -1,7 +1,9 @@
 # meteo-to-kindle
 
-Fetches a weather forecast image from meteo.pl (**Poland only**), overlays
-current air quality data from Airly, and converts it into a Kindle-friendly format.
+Fetches hourly forecast data from the Meteo ICM API (the JSON backend behind
+[app.meteo.pl](https://app.meteo.pl), **Poland only**), renders its own
+grayscale meteogram, overlays current air quality data from Airly, and formats
+everything for a Kindle e-ink display.
 
 The Kindle downloads the image and displays it on its e-ink screen.
 If the battery level drops below 30%, it also displays a warning to charge
@@ -28,6 +30,17 @@ The command can also be run as `uv run python -m meteo_to_kindle`. Set
 `METEO_SHARE_PATH` to choose the mounted directory where the Kindle fetches the
 image. Both default to the current directory and `/home/dietpi`, respectively.
 The bundled template and fonts are read from the installed package.
+
+### Weather models
+
+The forecast point is the same one used for Airly. `METEO_MODEL` selects the
+forecast model (default `um4_60`):
+
+| Model | Horizon |
+| --- | --- |
+| `um4_60` | UM 4 km, 60 h hourly |
+| `um4_120` | UM 4 km, 120 h hourly |
+| `gfs` | GFS, 240 h hourly |
 
 ## Kindle FTP credentials
 
