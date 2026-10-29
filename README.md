@@ -15,8 +15,8 @@ and a LaCie NAS for storage.
 ## Install and run
 
 This is an installable Python application. On the Raspberry Pi, install Python
-3.14+, `uv`, and `pngcrush` (optional; used to compress the published image),
-then run:
+3.14+, `uv`, and `pngcrush` (required to publish to `METEO_SHARE_PATH`; without
+it, the image is only written to `METEO_OUTPUT_DIR`), then run:
 
 ```sh
 uv sync
