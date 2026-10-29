@@ -24,7 +24,9 @@ def publish_to_share(output: Path, share_path: Path) -> None:
         return
     # fixed argument list, shell=False
     subprocess.run([pngcrush, "-c", "0", str(output)], check=True, cwd=output.parent)  # noqa: S603
-    (output.parent / "pngout.png").replace(share_path / "pngout.png")
+    # shutil.move survives shares on a different filesystem (Path.replace
+    # would fail with EXDEV); same device it is a plain rename.
+    shutil.move(output.parent / "pngout.png", share_path / "pngout.png")
 
 
 def main() -> None:
