@@ -14,9 +14,17 @@ RIMG="192.168.1.125/OpenShare/weather/weather-script-output.png"
 FTPHOST=${RIMG%%/*}
 NETRC="/var/local/meteo-to-kindle/netrc"
 
-if [ ! -r "$CONFIG" ]; then
-  echo "Missing readable credentials file: $CONFIG" >&2
+# Cron never sees stderr: surface any failure on the e-ink display so the
+# screen stops implying the last forecast is current.
+fail_early() {  # $* = failure reason
+  eips -f -g "$LIMGERR"
+  echo "`date '+%Y-%m-%d_%H:%M:%S'` | $*" >> "$LOG" 2>&1
+  echo "$*" >&2
   exit 1
+}
+
+if [ ! -r "$CONFIG" ]; then
+  fail_early "Missing readable credentials file: $CONFIG"
 fi
 
 # The file is sourced as shell code: a more permissive file or directory
@@ -27,22 +35,28 @@ ME=$(id -un)
 FILESTAT=$(ls -ld -- "$CONFIG" 2>/dev/null | awk '{print $1, $3}')
 DIRSTAT=$(ls -ld -- "${CONFIG%/*}" 2>/dev/null | awk '{print $1, $3}')
 if [ "$FILESTAT" != "-rw------- $ME" ]; then
-  echo "Credentials file must be owned by $ME with mode 600: $CONFIG" >&2
-  exit 1
+  fail_early "Credentials file must be owned by $ME with mode 600: $CONFIG"
 fi
 if [ "$DIRSTAT" != "drwx------ $ME" ]; then
-  echo "Credentials directory must be owned by $ME with mode 700: ${CONFIG%/*}" >&2
-  exit 1
+  fail_early "Credentials directory must be owned by $ME with mode 700: ${CONFIG%/*}"
 fi
 . "$CONFIG"
-: "${FTP_USER:?FTP_USER must be set in $CONFIG}"
-: "${FTP_PASSWORD:?FTP_PASSWORD must be set in $CONFIG}"
+if [ -z "${FTP_USER:-}" ] || [ -z "${FTP_PASSWORD:-}" ]; then
+  fail_early "FTP_USER and FTP_PASSWORD must be set in $CONFIG"
+fi
 
 # Keep the password off wget's command line (visible in `ps` output) by
 # handing wget a netrc file regenerated in the same protected directory.
 # The credentials file stays the single source of truth. Requires the GNU
 # wget that recent Kindle firmware ships (--netrc-file, since 1.16).
-printf 'machine %s login %s password %s\n' "$FTPHOST" "$FTP_USER" "$FTP_PASSWORD" > "$NETRC"
+# Values are always quoted and escaped: wget's netrc parser strips quotes
+# and honours backslash escapes (netrc.c), which also keeps credentials
+# containing spaces, quotes or backslashes intact.
+encode() {  # $* = value -> quoted, escaped netrc token on stdout
+  printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
+netrc_line="machine $(encode "$FTPHOST") login $(encode "$FTP_USER") password $(encode "$FTP_PASSWORD")"
+printf '%s\n' "$netrc_line" > "$NETRC"
 chmod 600 "$NETRC"
 
 echo "================================================"                                          >> $LOG 2>&1
