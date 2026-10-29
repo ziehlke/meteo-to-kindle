@@ -40,6 +40,9 @@ fi
 if [ "$DIRSTAT" != "drwx------ $ME" ]; then
   fail_early "Credentials directory must be owned by $ME with mode 700: ${CONFIG%/*}"
 fi
+if ! sh -n "$CONFIG"; then
+  fail_early "Invalid shell syntax in credentials file: $CONFIG"
+fi
 . "$CONFIG"
 if [ -z "${FTP_USER:-}" ] || [ -z "${FTP_PASSWORD:-}" ]; then
   fail_early "FTP_USER and FTP_PASSWORD must be set in $CONFIG"
