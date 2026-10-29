@@ -64,7 +64,7 @@ def test_fetch_returns_latest_run_as_series() -> None:
         )
     )
 
-    data = MeteoClient().fetch()
+    data = MeteoClient(model="um4_60").fetch()
 
     assert route.called
     body = json.loads(route.calls[0].request.content)
@@ -111,7 +111,7 @@ def test_fetch_retries_then_succeeds(fast_sleep: list[float]) -> None:
         ]
     )
 
-    data = MeteoClient().fetch()
+    data = MeteoClient(model="um4_60").fetch()
 
     assert data.values("airtmp_point") == (1.0,)
     assert fast_sleep == [meteo.RETRY_DELAY_SECONDS]
@@ -123,7 +123,7 @@ def test_fetch_gives_up_after_max_retries(fast_sleep: list[float]) -> None:
     respx.post(RUN_URL).mock(return_value=httpx.Response(500))
 
     with pytest.raises(RuntimeError, match="Failed to fetch forecast after 3 attempts"):
-        MeteoClient().fetch()
+        MeteoClient(model="um4_60").fetch()
     assert fast_sleep == [meteo.RETRY_DELAY_SECONDS, meteo.RETRY_DELAY_SECONDS]
 
 
@@ -136,7 +136,7 @@ def test_fetch_retries_invalid_json(fast_sleep: list[float]) -> None:
         ]
     )
 
-    client = MeteoClient()
+    client = MeteoClient(model="um4_60")
     assert client._fetch_available() == 1793059200
     assert fast_sleep == [meteo.RETRY_DELAY_SECONDS]
 
@@ -161,7 +161,7 @@ def test_fetch_raises_on_malformed_available_response() -> None:
         ]
     )
 
-    client = MeteoClient()
+    client = MeteoClient(model="um4_60")
     for _ in range(3):
         with pytest.raises(RuntimeError, match="No runs available for model 'um4_60'"):
             client.fetch()

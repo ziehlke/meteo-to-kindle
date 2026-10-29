@@ -38,8 +38,8 @@ def _series(values: list[float]) -> dict[str, Any]:
 
 METEO_AVAILABLE: dict[str, Any] = {
     "um4_60": [1793059200],
-    "um4_120": [],
-    "gfs": [],
+    "um4_120": [1793059200],
+    "gfs": [1793059200],
 }
 
 METEO_RUN: dict[str, Any] = {
