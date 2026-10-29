@@ -58,9 +58,14 @@ chmod 600 /var/local/meteo-to-kindle/credentials
 ```
 
 The script sources this file itself, so cron does not need to inherit an
-interactive shell's environment. Use a dedicated, read-only FTP account with a
-URL-safe password, and rotate any credentials previously embedded in the
-script. FTP does not encrypt credentials in transit; keep it limited to a
-trusted local network.
+interactive shell's environment, and it re-checks the modes above first:
+it refuses to run if the file or its directory is more open than
+documented, or owned by someone else. Use a dedicated, read-only FTP
+account with a URL-safe password. Before each download it derives a
+`chmod 600` netrc file in that same directory and passes it to wget
+(`--netrc-file`), so the FTP password never appears on wget's command
+line, where another local process could see it in `ps`. FTP does not
+encrypt credentials in transit; keep it limited to the networks you
+actually trust.
 
 ![Kindle displaying the weather forecast](https://github.com/cielke/meteo-to-kindle/raw/master/20180508_162118.jpg)
