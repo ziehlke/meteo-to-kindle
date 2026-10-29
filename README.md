@@ -61,7 +61,8 @@ The script sources this file itself, so cron does not need to inherit an
 interactive shell's environment, and it re-checks the modes above first:
 it refuses to run if the file or its directory is more open than
 documented, or owned by someone else. Use a dedicated, read-only FTP
-account with a URL-safe password. Before each download it derives a
+account; credentials may contain spaces or quotes, since the script
+encodes them for the netrc format. Before each download it derives a
 `chmod 600` netrc file in that same directory and passes it to wget
 (`--netrc-file`), so the FTP password never appears on wget's command
 line, where another local process could see it in `ps`. FTP does not
