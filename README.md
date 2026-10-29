@@ -63,8 +63,9 @@ it refuses to run if the file or its directory is more open than
 documented, or owned by someone else. Use a dedicated, read-only FTP
 account; credentials may contain spaces or quotes, since the script
 encodes them for the netrc format. Before each download it derives a
-`chmod 600` netrc file in that same directory and passes it to wget
-(`--netrc-file`), so the FTP password never appears on wget's command
+`chmod 600` `.netrc` file in that same protected directory and sets `HOME`
+to that directory for wget to read its default `$HOME/.netrc` file.
+The FTP password never appears on wget's command
 line, where another local process could see it in `ps`. FTP does not
 encrypt credentials in transit; keep it limited to the networks you
 actually trust.

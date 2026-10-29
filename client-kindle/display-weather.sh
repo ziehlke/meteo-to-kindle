@@ -12,7 +12,7 @@ CONFIG="/var/local/meteo-to-kindle/credentials"
 
 RIMG="192.168.1.125/OpenShare/weather/weather-script-output.png"
 FTPHOST=${RIMG%%/*}
-NETRC="/var/local/meteo-to-kindle/netrc"
+NETRC="${CONFIG%/*}/.netrc"
 
 # Cron never sees stderr: surface any failure on the e-ink display so the
 # screen stops implying the last forecast is current.
@@ -50,8 +50,8 @@ fi
 
 # Keep the password off wget's command line (visible in `ps` output) by
 # handing wget a netrc file regenerated in the same protected directory.
-# The credentials file stays the single source of truth. Requires the GNU
-# wget that recent Kindle firmware ships (--netrc-file, since 1.16).
+# The credentials file stays the single source of truth. GNU wget reads
+# .netrc from HOME, set to that directory for the download below.
 # Values are always quoted and escaped: wget's netrc parser strips quotes
 # and honours backslash escapes (netrc.c), which also keeps credentials
 # containing spaces, quotes or backslashes intact.
@@ -85,7 +85,7 @@ fi
 
 lipc-set-prop com.lab126.powerd preventScreenSaver 1   #prevent screenSaver On
 rm $LIMG
-if wget -q --netrc-file="$NETRC" "ftp://$RIMG" -O "$LIMG"; then
+if HOME="${NETRC%/*}" wget -q "ftp://$RIMG" -O "$LIMG"; then
   eips -f -g "$LIMG"
   echo "`date '+%Y-%m-%d_%H:%M:%S'` | New image downaloded and displayed"                          >> $LOG 2>&1
 else
