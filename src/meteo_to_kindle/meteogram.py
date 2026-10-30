@@ -33,17 +33,19 @@ GRID = "0.7"
 # Wind direction arrows, north = up; the arrow points where the wind blows
 _DIRECTION_ARROWS = ("↑", "↗", "→", "↘", "↓", "↙", "←", "↖")
 
-# Panel rectangles in figure fractions: (left, bottom, width, height)
-_TEMP_AX = (0.105, 0.66, 0.84, 0.25)
-_PRECIP_AX = (0.105, 0.43, 0.84, 0.185)
-_WIND_AX = (0.105, 0.21, 0.84, 0.165)
-_CLOUD_AX = (0.105, 0.035, 0.84, 0.12)
+# Panel rectangles in figure fractions: (left, bottom, width, height); the top
+# block reserves ~56px so hour labels, date captions and unit captions each
+# get their own horizontal band without collisions.
+_TEMP_AX = (0.105, 0.655, 0.84, 0.257)
+_PRECIP_AX = (0.105, 0.423, 0.84, 0.19)
+_WIND_AX = (0.105, 0.2, 0.84, 0.169)
+_CLOUD_AX = (0.105, 0.023, 0.84, 0.123)
 
 _MODEL_TITLES = {"um4_60": "UM4 · 60h", "um4_120": "UM4 · 120h", "gfs": "GFS · 240h"}
 
 
 def render_meteogram(data: MeteogramData, output: Path) -> Path:
-    """Render the meteogram PNG (600x500 px) and return its path."""
+    """Render the meteogram PNG (600x640 px) and return its path."""
     _register_fonts()
     hours = np.arange(len(data.timestamps))
     local = [ts.astimezone(ZoneInfo(TIMEZONE_NAME)) for ts in data.timestamps]
@@ -109,7 +111,7 @@ def _style_axes(
             bottom=False,
             labelbottom=False,
         )
-        ax.tick_params(axis="y", labelsize=6.5, length=2, pad=1)
+        ax.tick_params(axis="y", labelsize=7.5, length=2, pad=1)
         ax.grid(axis="x", color=GRID, linestyle=":", linewidth=0.6, which="major")
         for spine in ax.spines.values():
             spine.set_linewidth(0.8)
@@ -119,7 +121,7 @@ def _style_axes(
         ax.set_axisbelow(True)
 
     if day_ticks:
-        axes[0].set_xticklabels([f"{local[i]:%H}" for i in day_ticks], fontsize=8)
+        axes[0].set_xticklabels([f"{local[i]:%H}" for i in day_ticks], fontsize=9)
 
 
 def _night_segments(
@@ -183,13 +185,13 @@ def _is_sunlit(moment: datetime, latitude: float, longitude: float) -> bool:
 def _draw_header(fig: plt.Figure, data: MeteogramData, local: list[datetime]) -> None:
     """Model label on the left, location and run time on the right."""
     fig.text(
-        0.012, 0.99, _model_title(data.model), fontsize=10, weight="bold", va="top"
+        0.012, 0.99, _model_title(data.model), fontsize=11, weight="bold", va="top"
     )
     fig.text(
         0.988,
         0.99,
         f"{_point_label(data)} • run {data.start:%d.%m %H:%M} UTC",
-        fontsize=7.5,
+        fontsize=8.5,
         ha="right",
         va="top",
         color=DARK,
@@ -202,7 +204,7 @@ def _draw_header(fig: plt.Figure, data: MeteogramData, local: list[datetime]) ->
             alignment, position = "right", 0.99
         elif fraction < 0.08:
             alignment, position = "left", 0.01
-        fig.text(position, 0.945, label, fontsize=8, ha=alignment)
+        fig.text(position, 0.945, label, fontsize=9, ha=alignment)
 
 
 def _point_label(data: MeteogramData) -> str:
@@ -249,16 +251,24 @@ def _finite_max(*arrays: np.ndarray) -> float | None:
 
 
 def _unit_label(ax: plt.Axes, text: str, side: str) -> None:
-    """Draw a unit caption just outside a panel's top corner."""
-    anchor = {"left": (-0.015, "right"), "right": (1.015, "left")}[side]
+    """Draw a unit caption at a panel's top corner.
+
+    Left captions sit just above the frame rim; right captions sit just
+    below it, inside the panel, so they never collide with the hour
+    labels that share the band above the frame.
+    """
+    anchor = {
+        "left": (-0.015, 1.02, "right", "bottom"),
+        "right": (0.988, 0.97, "right", "top"),
+    }[side]
     ax.text(
         anchor[0],
-        1.02,
+        anchor[1],
         text,
         transform=ax.transAxes,
-        ha=anchor[1],
-        va="bottom",
-        fontsize=7,
+        ha=anchor[2],
+        va=anchor[3],
+        fontsize=8,
         color=INK,
     )
 
@@ -285,7 +295,7 @@ def _draw_temperature(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> N
     pressure_ax.set_ylim(*_bounds(pressure))
     pressure_ax.yaxis.set_major_locator(MaxNLocator(nbins=3, integer=True))
     pressure_ax.yaxis.set_major_formatter(StrMethodFormatter("{x:.0f}"))
-    pressure_ax.tick_params(axis="y", labelsize=6.5, pad=1)
+    pressure_ax.tick_params(axis="y", labelsize=7.5, pad=1)
     _unit_label(pressure_ax, "[hPa]", "right")
     pressure_ax.spines["top"].set_visible(False)
 
@@ -335,7 +345,7 @@ def _draw_precipitation(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) ->
             hour,
             top * 0.92,
             "▼",
-            fontsize=6,
+            fontsize=7,
             ha="center",
             va="top",
             family="DejaVu Sans",
@@ -346,7 +356,7 @@ def _draw_precipitation(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) ->
     probability_ax.plot(hours, probability, color=MID, linewidth=0.7, linestyle=":")
     probability_ax.set_ylim(0, 100)
     probability_ax.set_yticks([0, 50, 100])
-    probability_ax.tick_params(axis="y", labelsize=6.5, pad=1)
+    probability_ax.tick_params(axis="y", labelsize=7.5, pad=1)
     _unit_label(probability_ax, "[%]", "right")
     probability_ax.spines["top"].set_visible(False)
 
@@ -377,7 +387,7 @@ def _draw_wind(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
             hour,
             top * 0.97,
             arrow,
-            fontsize=7,
+            fontsize=8,
             ha="center",
             va="top",
             family="DejaVu Sans",

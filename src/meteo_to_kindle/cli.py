@@ -34,7 +34,6 @@ def main() -> None:
     # Generate air quality data
     airly = Airly()
     airly.fill_template()
-    airly.plot_caqi_history()
 
     # Fetch forecast data and render our own meteogram
     data = MeteoClient().fetch()
@@ -43,7 +42,6 @@ def main() -> None:
     # Compose the final display image
     processor = WeatherImageProcessor(OUTPUT_DIR)
     image = processor.paste_meteogram(meteogram)
-    image = processor.paste_caqi(image)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output = OUTPUT_DIR / OUTPUT_FILENAME
