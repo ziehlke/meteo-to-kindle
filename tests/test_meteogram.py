@@ -36,6 +36,7 @@ def _data(
         "airtmp_min": tuple(8 + 5 * np.sin(i / 6) for i in range(hours)),
         "airtmp_max": tuple(12 + 5 * np.sin(i / 6) for i in range(hours)),
         "dwptmp_point": tuple(7 + 5 * np.sin(i / 6) for i in range(hours)),
+        "wchill_point": tuple(9 + 5 * np.sin(i / 6) for i in range(hours)),
         "slpres_point": tuple(101_000 + 300 * i for i in range(hours)),
         "pcpttl_max": tuple(
             1.5 if 4 <= i < 6 else 1.0 if i == 6 else 0.0 for i in range(hours)
@@ -170,3 +171,16 @@ def test_date_labels_centered_per_day() -> None:
     # 0-10 (13:00-23:00), centered at 5.0; Oct 27 covers indices 11-23, at 17.0
     assert labels[0][1] == pytest.approx(5.0)
     assert labels[1][1] == pytest.approx(17.0)
+
+
+def test_date_labels_compact_drops_weekday() -> None:
+    labels = _date_labels(_local(_data(hours=24)), compact=True)
+
+    assert labels[0][0] == "26.10"
+    assert labels[1][0] == "27.10"
+
+
+def test_render_gfs_horizon_thins_hour_ticks(tmp_path: Path) -> None:
+    pixels = _rendered(_data(hours=240), tmp_path)
+
+    assert pixels.shape == (640, 600)

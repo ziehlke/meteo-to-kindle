@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import matplotlib.font_manager
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator, StrMethodFormatter
 
 from .config import FONT_DIR, METEOGRAM_DPI, METEOGRAM_FIGSIZE, TIMEZONE_NAME
@@ -34,12 +35,12 @@ GRID = "0.7"
 _DIRECTION_ARROWS = ("↑", "↗", "→", "↘", "↓", "↙", "←", "↖")
 
 # Panel rectangles in figure fractions: (left, bottom, width, height); the top
-# block reserves ~56px so hour labels, date captions and unit captions each
+# block reserves ~65px so date captions, hour labels and unit captions each
 # get their own horizontal band without collisions.
-_TEMP_AX = (0.105, 0.655, 0.84, 0.257)
-_PRECIP_AX = (0.105, 0.423, 0.84, 0.19)
-_WIND_AX = (0.105, 0.2, 0.84, 0.169)
-_CLOUD_AX = (0.105, 0.023, 0.84, 0.123)
+_TEMP_AX = (0.105, 0.641, 0.84, 0.257)
+_PRECIP_AX = (0.105, 0.411, 0.84, 0.19)
+_WIND_AX = (0.105, 0.192, 0.84, 0.169)
+_CLOUD_AX = (0.105, 0.02, 0.84, 0.123)
 
 _MODEL_TITLES = {"um4_60": "UM4 · 60h", "um4_120": "UM4 · 120h", "gfs": "GFS · 240h"}
 
@@ -68,10 +69,21 @@ def render_meteogram(data: MeteogramData, output: Path) -> Path:
         _draw_wind(wind_ax, data, hours)
         _draw_clouds(cloud_ax, data, hours)
 
-        # Tick numerals use DejaVu Sans: Manrope spaces multi-digit numbers loosely
+        # Tick numerals use DejaVu Sans: Manrope spaces multi-digit numbers loosely.
+        # On panels whose top tick sits exactly at the frame edge (fixed ylims),
+        # anchor that label downward so its ink stays clear of the captions.
         for axis in fig.axes:
-            for label in axis.get_yticklabels():
+            yticks = axis.get_yticks()
+            labels = axis.get_yticklabels()
+            for label in labels:
                 label.set_fontfamily("DejaVu Sans")
+            if (
+                labels
+                and yticks.size
+                and np.isclose(yticks[-1], axis.get_ylim()[1])
+                and labels[-1].get_fontsize() == 16
+            ):
+                labels[-1].set_verticalalignment("top")
 
         fig.savefig(output, dpi=METEOGRAM_DPI, facecolor="white")
     finally:
@@ -92,8 +104,11 @@ def _style_axes(
     local: list[datetime],
     nights: list[tuple[float, float]],
 ) -> None:
-    """Shared panel look: frames, 6h gridlines, night shading, top ticks."""
-    day_ticks = [i for i, moment in enumerate(local) if moment.hour % 6 == 0]
+    """Shared panel look: frames, hour gridlines, night shading, top ticks."""
+    # 6h ticks need ~25px per gap; beyond 120 hours (GFS 240h) they would be
+    # closer than the 10.5pt hour labels, so long horizons step to 12h ticks.
+    step = 12 if len(local) > 120 else 6
+    day_ticks = [i for i, moment in enumerate(local) if moment.hour % step == 0]
 
     for index, ax in enumerate(axes):
         left, right = (
@@ -111,7 +126,7 @@ def _style_axes(
             bottom=False,
             labelbottom=False,
         )
-        ax.tick_params(axis="y", labelsize=7.5, length=2, pad=1)
+        ax.tick_params(axis="y", labelsize=16, length=2, pad=1)
         ax.grid(axis="x", color=GRID, linestyle=":", linewidth=0.6, which="major")
         for spine in ax.spines.values():
             spine.set_linewidth(0.8)
@@ -121,7 +136,7 @@ def _style_axes(
         ax.set_axisbelow(True)
 
     if day_ticks:
-        axes[0].set_xticklabels([f"{local[i]:%H}" for i in day_ticks], fontsize=9)
+        axes[0].set_xticklabels([f"{local[i]:%H}" for i in day_ticks], fontsize=10.5)
 
 
 def _night_segments(
@@ -183,28 +198,47 @@ def _is_sunlit(moment: datetime, latitude: float, longitude: float) -> bool:
 
 
 def _draw_header(fig: plt.Figure, data: MeteogramData, local: list[datetime]) -> None:
-    """Model label on the left, location and run time on the right."""
+    """Model label and curve legend on top, day captions below."""
     fig.text(
-        0.012, 0.99, _model_title(data.model), fontsize=11, weight="bold", va="top"
+        0.012, 0.99, _model_title(data.model), fontsize=13, weight="bold", va="top"
     )
     fig.text(
         0.988,
         0.99,
         f"{_point_label(data)} • run {data.start:%d.%m %H:%M} UTC",
-        fontsize=8.5,
+        fontsize=10,
         ha="right",
         va="top",
         color=DARK,
     )
+    # Curve legend for the temperature panel, in the gap between the title
+    # and the run info; styles mirror the plotted lines exactly.
+    fig.legend(
+        handles=[
+            Line2D([], [], color=DARK, linewidth=1.0),  # air temperature
+            Line2D([], [], color=INK, linewidth=1.8),  # apparent temperature
+            Line2D([], [], color=MID, linewidth=0.9, linestyle="--"),  # dew point
+            Line2D([], [], color=DARK, linewidth=0.7, linestyle=":"),  # pressure
+        ],
+        labels=["Air", "Feels", "Dew", "hPa"],
+        ncols=4,
+        fontsize=8.5,
+        frameon=False,
+        handlelength=1.3,
+        columnspacing=0.8,
+        handletextpad=0.4,
+        loc="upper center",
+        bbox_to_anchor=(0.4, 0.993),
+    )
     span = max(len(local) - 1, 1)
-    for label, center in _date_labels(local):
+    for label, center in _date_labels(local, compact=len(local) > 120):
         fraction = center / span
         alignment, position = "center", fraction
         if fraction > 0.92:  # keep the last day's caption inside the frame
             alignment, position = "right", 0.99
         elif fraction < 0.08:
             alignment, position = "left", 0.01
-        fig.text(position, 0.945, label, fontsize=9, ha=alignment)
+        fig.text(position, 0.938, label, fontsize=10.5, ha=alignment)
 
 
 def _point_label(data: MeteogramData) -> str:
@@ -219,11 +253,18 @@ def _model_title(model: str) -> str:
     return _MODEL_TITLES.get(model, model)
 
 
-def _date_labels(local: list[datetime]) -> list[tuple[str, float]]:
-    """Date captions centered over each day's hours, as (label, hour index)."""
+def _date_labels(
+    local: list[datetime], compact: bool = False
+) -> list[tuple[str, float]]:
+    """Date captions centered over each day's hours, as (label, hour index).
+
+    Long horizons (GFS 240h) squeeze day buckets to ~50px, too narrow for
+    the full weekday caption; compact mode drops the weekday.
+    """
+    pattern = "%d.%m" if compact else "%a %d.%m"
     indices: dict[str, list[int]] = {}
     for index, moment in enumerate(local):
-        indices.setdefault(f"{moment:%a %d.%m}", []).append(index)
+        indices.setdefault(f"{moment:{pattern}}", []).append(index)
     return [
         (label, (min(day) + max(day)) / 2) for label, day in sorted(indices.items())
     ]
@@ -253,12 +294,14 @@ def _finite_max(*arrays: np.ndarray) -> float | None:
 def _unit_label(ax: plt.Axes, text: str, side: str) -> None:
     """Draw a unit caption at a panel's top corner.
 
-    Left captions sit just above the frame rim; right captions sit just
-    below it, inside the panel, so they never collide with the hour
-    labels that share the band above the frame.
+    Left captions sit above the frame rim, high enough to stay clear of
+    the 16pt tick labels that hang below their tick position; right
+    captions sit just below the rim, inside the panel, so they never
+    collide with the hour labels sharing the band above the frame, and
+    get an opaque patch so data lines cannot show through the glyphs.
     """
     anchor = {
-        "left": (-0.015, 1.02, "right", "bottom"),
+        "left": (-0.04, 1.06, "right", "bottom"),
         "right": (0.988, 0.97, "right", "top"),
     }[side]
     ax.text(
@@ -268,35 +311,41 @@ def _unit_label(ax: plt.Axes, text: str, side: str) -> None:
         transform=ax.transAxes,
         ha=anchor[2],
         va=anchor[3],
-        fontsize=8,
+        fontsize=9.5,
         color=INK,
+        bbox={"facecolor": "white", "edgecolor": "none", "pad": 1}
+        if side == "right"
+        else None,
     )
 
 
 def _draw_temperature(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
-    """Temperature panel: mean line, dew point, min/max whiskers, pressure."""
+    """Temperature panel: apparent temperature by wind, min/max, dew point."""
     temp = _values(data, "airtmp_point")
     temp_min = _values(data, "airtmp_min")
     temp_max = _values(data, "airtmp_max")
+    chill = _values(data, "wchill_point")
     dew = _values(data, "dwptmp_point")
     pressure = _values(data, "slpres_point") / 100
 
     whisker = np.isfinite(temp_min) & np.isfinite(temp_max)
     ax.vlines(hours[whisker], temp_min[whisker], temp_max[whisker], color=MID, lw=0.7)
-    ax.plot(hours, temp, color=INK, linewidth=1.2)
+    ax.plot(hours, temp, color=DARK, linewidth=1.0)
     ax.plot(hours, dew, color=MID, linewidth=0.9, linestyle="--")
+    # Drawn last so the apparent-temperature line is the most distinct
+    ax.plot(hours, chill, color=INK, linewidth=1.8)
 
-    ax.set_ylim(*_bounds(temp_min, temp, temp_max, dew))
+    ax.set_ylim(*_bounds(temp_min, temp, temp_max, dew, chill))
     ax.yaxis.set_major_locator(MaxNLocator(nbins=4, integer=True))
-    _unit_label(ax, "[°C]", "left")
+    _unit_label(ax, "°C", "left")
 
     pressure_ax = ax.twinx()
     pressure_ax.plot(hours, pressure, color=DARK, linewidth=0.7, linestyle=":")
     pressure_ax.set_ylim(*_bounds(pressure))
     pressure_ax.yaxis.set_major_locator(MaxNLocator(nbins=3, integer=True))
     pressure_ax.yaxis.set_major_formatter(StrMethodFormatter("{x:.0f}"))
-    pressure_ax.tick_params(axis="y", labelsize=7.5, pad=1)
-    _unit_label(pressure_ax, "[hPa]", "right")
+    pressure_ax.tick_params(axis="y", labelsize=9, pad=1)
+    _unit_label(pressure_ax, "hPa", "right")
     pressure_ax.spines["top"].set_visible(False)
 
 
@@ -336,7 +385,7 @@ def _draw_precipitation(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) ->
     top = max(1.0, np.ceil((maximum or 0.0) * 1.2 * 2) / 2)
     ax.set_ylim(0, top)
     ax.set_yticks([0, top])
-    _unit_label(ax, "[mm/h]", "left")
+    _unit_label(ax, "mm/h", "left")
 
     for hour in [
         i for i, storm in enumerate(_values(data, "storm_max")) if storm and storm >= 1
@@ -345,7 +394,7 @@ def _draw_precipitation(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) ->
             hour,
             top * 0.92,
             "▼",
-            fontsize=7,
+            fontsize=8,
             ha="center",
             va="top",
             family="DejaVu Sans",
@@ -356,8 +405,8 @@ def _draw_precipitation(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) ->
     probability_ax.plot(hours, probability, color=MID, linewidth=0.7, linestyle=":")
     probability_ax.set_ylim(0, 100)
     probability_ax.set_yticks([0, 50, 100])
-    probability_ax.tick_params(axis="y", labelsize=7.5, pad=1)
-    _unit_label(probability_ax, "[%]", "right")
+    probability_ax.tick_params(axis="y", labelsize=9, pad=1)
+    _unit_label(probability_ax, "%", "right")
     probability_ax.spines["top"].set_visible(False)
 
 
@@ -373,7 +422,7 @@ def _draw_wind(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
     top = (_finite_max(gust) or 1.0) * 1.3 + 1
     ax.set_ylim(0, top)
     ax.yaxis.set_major_locator(MaxNLocator(nbins=3, integer=True))
-    _unit_label(ax, "[m/s]", "left")
+    _unit_label(ax, "m/s", "left")
 
     every = max(1, len(hours) // 20)
     # Start one hour in so edge arrows aren't clipped by the panel border
@@ -387,7 +436,7 @@ def _draw_wind(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
             hour,
             top * 0.97,
             arrow,
-            fontsize=8,
+            fontsize=9.5,
             ha="center",
             va="top",
             family="DejaVu Sans",
@@ -409,4 +458,4 @@ def _draw_clouds(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
         )
     ax.set_ylim(0, 100)
     ax.set_yticks([0, 50, 100])
-    _unit_label(ax, "[%]", "left")
+    _unit_label(ax, "%", "left")
