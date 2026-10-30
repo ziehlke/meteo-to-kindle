@@ -18,14 +18,13 @@ METEO_MODEL = os.environ.get("METEO_MODEL", "um4_60")
 TIMEZONE_NAME = "Europe/Warsaw"
 
 # Meteogram rendering
-METEOGRAM_FIGSIZE = (6, 5)  # 600x500 px at METEOGRAM_DPI
+METEOGRAM_FIGSIZE = (6, 6.4)  # 600x640 px at METEOGRAM_DPI
 METEOGRAM_DPI = 100
 METEOGRAM_FILENAME = "meteogram.png"
 
 # File paths
 OUTPUT_FILENAME = "weather-script-output.png"
 TEMPLATE_FILENAME = "master_template.png"
-CAQI_FILENAME = "caqi.png"
 TEMPLATE_PROCESSED_FILENAME = "template.png"
 
 # Font paths
@@ -62,10 +61,6 @@ PM10_MAX_THRESHOLD = 50.0  # WHO 24h guideline (µg/m³)
 # Emoji mapping for air quality
 AIR_QUALITY_EMOJIS = "😍😀🙂😐😟🤬💩"
 
-# Chart configuration
-CHART_FIGSIZE = (7, 1)
-CHART_BAR_WIDTH = 0.94
-
 # Text positioning on template
 EMOJI_POSITION = (9, 653)
 CAQI_POSITION = (70, 650)
@@ -86,6 +81,3 @@ REGULAR_SMALL_FONT_SIZE = 15
 
 # Text formatting
 ADVICE_WRAP_WIDTH = 45
-
-# CAQI chart position
-CAQI_CHART_POSITION = (0, 500)

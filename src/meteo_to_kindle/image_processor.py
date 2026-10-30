@@ -4,16 +4,11 @@ from pathlib import Path
 
 from PIL import Image
 
-from .config import (
-    CAQI_CHART_POSITION,
-    CAQI_FILENAME,
-    TARGET_IMAGE_WIDTH,
-    TEMPLATE_PROCESSED_FILENAME,
-)
+from .config import TARGET_IMAGE_WIDTH, TEMPLATE_PROCESSED_FILENAME
 
 
 class WeatherImageProcessor:
-    """Composes the meteogram and CAQI chart onto the template."""
+    """Composes the meteogram onto the template."""
 
     def __init__(self, output_dir: Path):
         """Initialize with the directory for generated intermediate files."""
@@ -26,13 +21,6 @@ class WeatherImageProcessor:
         with Image.open(self.output_dir / TEMPLATE_PROCESSED_FILENAME) as template:
             result = template.copy()
         result.paste(resized, (0, 0))
-        return result
-
-    def paste_caqi(self, image: Image.Image) -> Image.Image:
-        """Paste the CAQI history chart onto the image."""
-        result = image.copy()
-        with Image.open(self.output_dir / CAQI_FILENAME) as caqi:
-            result.paste(caqi, CAQI_CHART_POSITION)
         return result
 
     @staticmethod

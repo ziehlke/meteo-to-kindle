@@ -1,4 +1,4 @@
-"""Tests for image_processor: composing the template, meteogram and CAQI chart."""
+"""Tests for image_processor: composing the template and meteogram."""
 
 from pathlib import Path
 
@@ -8,7 +8,6 @@ from meteo_to_kindle.image_processor import WeatherImageProcessor
 
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
-GREEN = (0, 255, 0)
 
 
 def _solid(size: tuple[int, int], color: tuple[int, int, int]) -> Image.Image:
@@ -43,16 +42,3 @@ def test_paste_meteogram_resizes_off_target_width(tmp_path: Path) -> None:
     # Resized meteogram ends at int(425 * 600 / 525) == 485
     assert result.getpixel((10, 486)) == BLUE
     assert meteogram.size == (525, 425)  # source file untouched
-
-
-def test_paste_caqi_draws_chart_without_mutating_input(tmp_path: Path) -> None:
-    caqi = _solid((100, 50), GREEN)
-    caqi.save(tmp_path / "caqi.png")
-    base = _solid((600, 800), BLUE)
-
-    processor = WeatherImageProcessor(output_dir=tmp_path)
-    result = processor.paste_caqi(base)
-
-    assert result.getpixel((10, 510)) == GREEN  # chart pasted at (0, 500)
-    assert result.getpixel((10, 499)) == BLUE  # above the chart unchanged
-    assert base.getpixel((10, 510)) == BLUE  # input not mutated

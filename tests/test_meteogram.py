@@ -71,9 +71,9 @@ def _rendered(data: MeteogramData, tmp_path: Path) -> np.ndarray:
         return np.array(image.convert("L"))
 
 
-def test_render_produces_600x500_image(tmp_path: Path) -> None:
+def test_render_produces_600x640_image(tmp_path: Path) -> None:
     pixels = _rendered(_data(), tmp_path)
-    assert pixels.shape == (500, 600)  # (height, width)
+    assert pixels.shape == (640, 600)  # (height, width)
 
 
 def test_render_contains_visible_content(tmp_path: Path) -> None:
@@ -91,7 +91,7 @@ def test_render_handles_missing_values(tmp_path: Path) -> None:
         WIND_DIRECTION: (None, 90.0, None, None),
     }
     pixels = _rendered(_data(hours=4, series=series), tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 def test_render_without_any_series(tmp_path: Path) -> None:
@@ -104,12 +104,12 @@ def test_render_without_any_series(tmp_path: Path) -> None:
         series={},
     )
     pixels = _rendered(data, tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 def test_render_single_hour(tmp_path: Path) -> None:
     pixels = _rendered(_data(hours=1), tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 def test_render_anchors_last_day_caption_inside_frame(tmp_path: Path) -> None:
@@ -125,7 +125,7 @@ def test_render_anchors_last_day_caption_inside_frame(tmp_path: Path) -> None:
         series={},
     )
     pixels = _rendered(data, tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 @pytest.mark.parametrize(
