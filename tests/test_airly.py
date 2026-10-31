@@ -183,21 +183,3 @@ def test_fill_template_picks_emoji_by_caqi(
     calls = rendered_template(payload)
     emoji_call = next(c for c in calls if c["text"] in "😍😀🙂😐😟🤬💩")
     assert emoji_call["text"] == emoji
-
-
-# ------------------------------------------------------------------ chart
-
-
-def test_plot_caqi_history_saves_chart(
-    airly_client: Airly, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(airly, "OUTPUT_DIR", tmp_path)
-    airly_client._data = PAYLOAD
-    airly_client.plot_caqi_history()
-    assert (tmp_path / "caqi.png").exists()
-
-
-def test_plot_caqi_history_requires_history(airly_client: Airly) -> None:
-    airly_client._data = {"current": PAYLOAD["current"]}
-    with pytest.raises(ValueError, match="No air quality data"):
-        airly_client.plot_caqi_history()

@@ -117,7 +117,6 @@ def test_main_end_to_end_offline(
     get_image.main()
 
     assert (tmp_path / "template.png").exists()
-    assert (tmp_path / "caqi.png").exists()
     assert (tmp_path / "meteogram.png").exists()
     output = tmp_path / "weather-script-output.png"
     with Image.open(output) as result:

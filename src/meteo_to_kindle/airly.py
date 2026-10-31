@@ -1,4 +1,4 @@
-"""Fetch air quality data from the Airly API and render overlay assets."""
+"""Fetch air quality data from the Airly API and render the template overlay."""
 
 import os
 import textwrap
@@ -7,11 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-import matplotlib
-
-matplotlib.use("Agg")  # headless backend, must be set before importing pyplot
-
-import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageFont import FreeTypeFont
 
@@ -26,10 +21,7 @@ from .config import (
     BOLD_FONT_PATH,
     BOLD_SMALL_FONT_SIZE,
     CAQI_BINS,
-    CAQI_FILENAME,
     CAQI_POSITION,
-    CHART_BAR_WIDTH,
-    CHART_FIGSIZE,
     EMOJI_FONT_PATH,
     EMOJI_FONT_SIZE,
     EMOJI_POSITION,
@@ -74,7 +66,7 @@ class Fonts:
 
 
 class Airly:
-    """Airly client that renders the air quality template and CAQI history chart."""
+    """Airly client that renders the air quality overlay onto the template."""
 
     def __init__(self) -> None:
         api_key = os.environ.get("AIRLY_KEY")
@@ -111,26 +103,6 @@ class Airly:
             if item["name"] == name:
                 return item["value"]
         return 0.0
-
-    def plot_caqi_history(self) -> None:
-        """Render the hourly CAQI bar chart to CAQI_FILENAME."""
-        if not self.data or "history" not in self.data:
-            raise ValueError("No air quality data available")
-
-        history = self.data["history"]
-        caqis = [entry["indexes"][0].get("value", 0) for entry in history]
-        colors = [entry["indexes"][0]["color"] for entry in history]
-        hours = [entry["fromDateTime"].split("T")[1][:2] for entry in history]
-        x_pos = list(range(len(caqis)))
-
-        fig, ax = plt.subplots(figsize=CHART_FIGSIZE)
-        try:
-            ax.bar(x_pos, caqis, color=colors, width=CHART_BAR_WIDTH)
-            ax.set_xticks(x_pos, hours)
-            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-            fig.savefig(OUTPUT_DIR / CAQI_FILENAME, bbox_inches="tight")
-        finally:
-            plt.close(fig)
 
     def fill_template(self) -> None:
         """Draw current air quality data onto the template image."""

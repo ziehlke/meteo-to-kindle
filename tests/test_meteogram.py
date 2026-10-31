@@ -6,13 +6,16 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
+from matplotlib import pyplot as plt
 from PIL import Image
 
 from meteo_to_kindle.meteo import MeteogramData
 from meteo_to_kindle.meteogram import (
     _date_labels,
+    _draw_header,
     _is_sunlit,
     _night_segments,
+    _register_fonts,
     render_meteogram,
 )
 
@@ -29,6 +32,7 @@ def _local(data: MeteogramData) -> list[datetime]:
 def _data(
     hours: int = 24,
     series: dict[str, tuple[float | None, ...]] | None = None,
+    start: datetime = START,
 ) -> MeteogramData:
     """Synthetic meteogram with smooth values and one rainy + one snowy spell."""
     default: dict[str, tuple[float | None, ...]] = {
@@ -36,6 +40,7 @@ def _data(
         "airtmp_min": tuple(8 + 5 * np.sin(i / 6) for i in range(hours)),
         "airtmp_max": tuple(12 + 5 * np.sin(i / 6) for i in range(hours)),
         "dwptmp_point": tuple(7 + 5 * np.sin(i / 6) for i in range(hours)),
+        "wchill_point": tuple(9 + 5 * np.sin(i / 6) for i in range(hours)),
         "slpres_point": tuple(101_000 + 300 * i for i in range(hours)),
         "pcpttl_max": tuple(
             1.5 if 4 <= i < 6 else 1.0 if i == 6 else 0.0 for i in range(hours)
@@ -56,10 +61,10 @@ def _data(
     }
     return MeteogramData(
         model="um4_60",
-        start=START,
+        start=start,
         latitude=50.07,
         longitude=20.05,
-        timestamps=tuple(START + timedelta(hours=i) for i in range(hours)),
+        timestamps=tuple(start + timedelta(hours=i) for i in range(hours)),
         series=default | (series or {}),
     )
 
@@ -71,9 +76,9 @@ def _rendered(data: MeteogramData, tmp_path: Path) -> np.ndarray:
         return np.array(image.convert("L"))
 
 
-def test_render_produces_600x500_image(tmp_path: Path) -> None:
+def test_render_produces_600x640_image(tmp_path: Path) -> None:
     pixels = _rendered(_data(), tmp_path)
-    assert pixels.shape == (500, 600)  # (height, width)
+    assert pixels.shape == (640, 600)  # (height, width)
 
 
 def test_render_contains_visible_content(tmp_path: Path) -> None:
@@ -91,7 +96,7 @@ def test_render_handles_missing_values(tmp_path: Path) -> None:
         WIND_DIRECTION: (None, 90.0, None, None),
     }
     pixels = _rendered(_data(hours=4, series=series), tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 def test_render_without_any_series(tmp_path: Path) -> None:
@@ -104,12 +109,12 @@ def test_render_without_any_series(tmp_path: Path) -> None:
         series={},
     )
     pixels = _rendered(data, tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 def test_render_single_hour(tmp_path: Path) -> None:
     pixels = _rendered(_data(hours=1), tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 def test_render_anchors_last_day_caption_inside_frame(tmp_path: Path) -> None:
@@ -125,7 +130,7 @@ def test_render_anchors_last_day_caption_inside_frame(tmp_path: Path) -> None:
         series={},
     )
     pixels = _rendered(data, tmp_path)
-    assert pixels.shape == (500, 600)
+    assert pixels.shape == (640, 600)
 
 
 @pytest.mark.parametrize(
@@ -170,3 +175,60 @@ def test_date_labels_centered_per_day() -> None:
     # 0-10 (13:00-23:00), centered at 5.0; Oct 27 covers indices 11-23, at 17.0
     assert labels[0][1] == pytest.approx(5.0)
     assert labels[1][1] == pytest.approx(17.0)
+
+
+def test_date_labels_compact_drops_weekday() -> None:
+    labels = _date_labels(_local(_data(hours=24)), compact=True)
+
+    assert labels[0][0] == "26.10"
+    assert labels[1][0] == "27.10"
+
+
+def test_render_gfs_horizon_thins_hour_ticks(tmp_path: Path) -> None:
+    pixels = _rendered(_data(hours=240), tmp_path)
+
+    assert pixels.shape == (640, 600)
+
+
+@pytest.mark.parametrize(
+    ("start", "width", "first_alignment", "last_alignment"),
+    [
+        (datetime(2026, 10, 26, 22, tzinfo=UTC), 6, "center", "center"),
+        (datetime(2026, 10, 25, 22, tzinfo=UTC), 6, "center", "right"),
+        (datetime(2026, 10, 26, 22, tzinfo=UTC), 2, "left", "right"),
+    ],
+)
+def test_date_caption_edges_follow_rendered_bounds(
+    start: datetime, width: int, first_alignment: str, last_alignment: str
+) -> None:
+    data = _data(hours=2, start=start)  # 23:00 and midnight in Warsaw
+    _register_fonts()
+    fig = plt.figure(figsize=(width, 6.4), dpi=100)
+    try:
+        _draw_header(fig, data, _local(data))
+        first, last = fig.texts[2:]
+        assert first.get_horizontalalignment() == first_alignment
+        assert last.get_horizontalalignment() == last_alignment
+        assert first.get_position()[0] == pytest.approx(
+            0.01 if first_alignment == "left" else 0.105
+        )
+        assert last.get_position()[0] == pytest.approx(
+            0.99 if last_alignment == "right" else 0.945
+        )
+        assert first.get_window_extent().x0 >= fig.bbox.x0
+        assert last.get_window_extent().x1 <= fig.bbox.x1
+    finally:
+        plt.close(fig)
+
+
+def test_evening_run_date_captions_remain_separate() -> None:
+    data = _data(hours=120, start=datetime(2026, 10, 31, 18, tzinfo=UTC))
+    _register_fonts()
+    fig = plt.figure(figsize=(6, 6.4), dpi=100)
+    try:
+        _draw_header(fig, data, _local(data))
+        first, second = fig.texts[2:4]
+        assert first.get_horizontalalignment() == "center"
+        assert first.get_window_extent().x1 < second.get_window_extent().x0
+    finally:
+        plt.close(fig)
