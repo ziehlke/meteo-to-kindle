@@ -6,13 +6,16 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
+from matplotlib import pyplot as plt
 from PIL import Image
 
 from meteo_to_kindle.meteo import MeteogramData
 from meteo_to_kindle.meteogram import (
     _date_labels,
+    _draw_header,
     _is_sunlit,
     _night_segments,
+    _register_fonts,
     render_meteogram,
 )
 
@@ -187,21 +190,45 @@ def test_render_gfs_horizon_thins_hour_ticks(tmp_path: Path) -> None:
     assert pixels.shape == (640, 600)
 
 
-def test_render_evening_run_keeps_date_captions_apart(tmp_path: Path) -> None:
-    """Sliver first day on an evening run must not collide with day 2.
+@pytest.mark.parametrize(
+    ("start", "width", "first_alignment", "last_alignment"),
+    [
+        (datetime(2026, 10, 26, 22, tzinfo=UTC), 6, "center", "center"),
+        (datetime(2026, 10, 25, 22, tzinfo=UTC), 6, "center", "right"),
+        (datetime(2026, 10, 26, 22, tzinfo=UTC), 2, "left", "right"),
+    ],
+)
+def test_date_caption_edges_follow_rendered_bounds(
+    start: datetime, width: int, first_alignment: str, last_alignment: str
+) -> None:
+    data = _data(hours=2, start=start)  # 23:00 and midnight in Warsaw
+    _register_fonts()
+    fig = plt.figure(figsize=(width, 6.4), dpi=100)
+    try:
+        _draw_header(fig, data, _local(data))
+        first, last = fig.texts[2:]
+        assert first.get_horizontalalignment() == first_alignment
+        assert last.get_horizontalalignment() == last_alignment
+        assert first.get_position()[0] == pytest.approx(
+            0.01 if first_alignment == "left" else 0.105
+        )
+        assert last.get_position()[0] == pytest.approx(
+            0.99 if last_alignment == "right" else 0.945
+        )
+        assert first.get_window_extent().x0 >= fig.bbox.x0
+        assert last.get_window_extent().x1 <= fig.bbox.x1
+    finally:
+        plt.close(fig)
 
-    18:00 UTC = 19:00 local: the first day bucket covers just 5 hours, so
-    its caption pins to the left rim while day 2 centers over its bucket.
-    """
-    pixels = _rendered(
-        _data(hours=120, start=datetime(2026, 10, 31, 18, tzinfo=UTC)), tmp_path
-    )
 
-    # Date-caption row (rows 26-44), left half of the figure: the pinned
-    # first caption must end with a >=10px blank gap before the second
-    # caption's zone begins (~x=100).
-    inked = np.flatnonzero((pixels[26:44, :250] < 100).any(axis=0))
-    gaps = inked[1:] - inked[:-1]
-    wide = np.flatnonzero(gaps >= 10)
-    assert wide.size >= 1, "date captions run together with no separating gap"
-    assert 40 <= inked[wide[0]] <= 95
+def test_evening_run_date_captions_remain_separate() -> None:
+    data = _data(hours=120, start=datetime(2026, 10, 31, 18, tzinfo=UTC))
+    _register_fonts()
+    fig = plt.figure(figsize=(6, 6.4), dpi=100)
+    try:
+        _draw_header(fig, data, _local(data))
+        first, second = fig.texts[2:4]
+        assert first.get_horizontalalignment() == "center"
+        assert first.get_window_extent().x1 < second.get_window_extent().x0
+    finally:
+        plt.close(fig)

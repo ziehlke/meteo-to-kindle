@@ -240,15 +240,16 @@ def _draw_header(fig: plt.Figure, data: MeteogramData, local: list[datetime]) ->
     labels = _date_labels(local, compact=len(local) > 120)
     for index, (label, center) in enumerate(labels):
         fraction = center / span
-        alignment, position = "center", axes_left + axes_width * fraction
-        # Only sliver days at the run edges need pinning to the figure rims;
-        # interior days are always full-day buckets, and pinning them too
-        # would let two captions share an anchor and overlap.
-        if index == 0 and fraction < 0.08:
-            alignment, position = "left", 0.01
-        elif index == len(labels) - 1 and fraction > 0.92:
-            alignment, position = "right", 0.99
-        fig.text(position, 0.938, label, fontsize=10.5, ha=alignment)
+        position = axes_left + axes_width * fraction
+        caption = fig.text(position, 0.938, label, fontsize=10.5, ha="center")
+        # Pin only edge captions whose centered text would cross the image.
+        bounds = caption.get_window_extent()
+        if index == 0 and bounds.x0 < fig.bbox.x0:
+            caption.set_horizontalalignment("left")
+            caption.set_x(0.01)
+        elif index == len(labels) - 1 and bounds.x1 > fig.bbox.x1:
+            caption.set_horizontalalignment("right")
+            caption.set_x(0.99)
 
 
 def _point_label(data: MeteogramData) -> str:
