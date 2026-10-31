@@ -231,13 +231,23 @@ def _draw_header(fig: plt.Figure, data: MeteogramData, local: list[datetime]) ->
         bbox_to_anchor=(0.4, 0.993),
     )
     span = max(len(local) - 1, 1)
-    for label, center in _date_labels(local, compact=len(local) > 120):
+    # Captions describe buckets inside the shared panel span (every panel
+    # has the same left edge and width), so map day centers into the axes
+    # region instead of raw figure fractions - otherwise captions drift
+    # left of the days they describe and the leftmost ones collide with
+    # their neighbours on runs starting late in the day.
+    axes_left, axes_width = _TEMP_AX[0], _TEMP_AX[2]
+    labels = _date_labels(local, compact=len(local) > 120)
+    for index, (label, center) in enumerate(labels):
         fraction = center / span
-        alignment, position = "center", fraction
-        if fraction > 0.92:  # keep the last day's caption inside the frame
-            alignment, position = "right", 0.99
-        elif fraction < 0.08:
+        alignment, position = "center", axes_left + axes_width * fraction
+        # Only sliver days at the run edges need pinning to the figure rims;
+        # interior days are always full-day buckets, and pinning them too
+        # would let two captions share an anchor and overlap.
+        if index == 0 and fraction < 0.08:
             alignment, position = "left", 0.01
+        elif index == len(labels) - 1 and fraction > 0.92:
+            alignment, position = "right", 0.99
         fig.text(position, 0.938, label, fontsize=10.5, ha=alignment)
 
 
@@ -262,12 +272,12 @@ def _date_labels(
     the full weekday caption; compact mode drops the weekday.
     """
     pattern = "%d.%m" if compact else "%a %d.%m"
+    # Dict insertion order keeps the buckets chronological - sorting by
+    # label string would scramble the day order ("Mon" < "Sat" < "Sun").
     indices: dict[str, list[int]] = {}
     for index, moment in enumerate(local):
         indices.setdefault(f"{moment:{pattern}}", []).append(index)
-    return [
-        (label, (min(day) + max(day)) / 2) for label, day in sorted(indices.items())
-    ]
+    return [(label, (min(day) + max(day)) / 2) for label, day in indices.items()]
 
 
 def _values(data: MeteogramData, name: str) -> np.ndarray:
