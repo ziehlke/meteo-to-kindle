@@ -29,6 +29,7 @@ def _local(data: MeteogramData) -> list[datetime]:
 def _data(
     hours: int = 24,
     series: dict[str, tuple[float | None, ...]] | None = None,
+    start: datetime = START,
 ) -> MeteogramData:
     """Synthetic meteogram with smooth values and one rainy + one snowy spell."""
     default: dict[str, tuple[float | None, ...]] = {
@@ -57,10 +58,10 @@ def _data(
     }
     return MeteogramData(
         model="um4_60",
-        start=START,
+        start=start,
         latitude=50.07,
         longitude=20.05,
-        timestamps=tuple(START + timedelta(hours=i) for i in range(hours)),
+        timestamps=tuple(start + timedelta(hours=i) for i in range(hours)),
         series=default | (series or {}),
     )
 
@@ -184,3 +185,23 @@ def test_render_gfs_horizon_thins_hour_ticks(tmp_path: Path) -> None:
     pixels = _rendered(_data(hours=240), tmp_path)
 
     assert pixels.shape == (640, 600)
+
+
+def test_render_evening_run_keeps_date_captions_apart(tmp_path: Path) -> None:
+    """Sliver first day on an evening run must not collide with day 2.
+
+    18:00 UTC = 19:00 local: the first day bucket covers just 5 hours, so
+    its caption pins to the left rim while day 2 centers over its bucket.
+    """
+    pixels = _rendered(
+        _data(hours=120, start=datetime(2026, 10, 31, 18, tzinfo=UTC)), tmp_path
+    )
+
+    # Date-caption row (rows 26-44), left half of the figure: the pinned
+    # first caption must end with a >=10px blank gap before the second
+    # caption's zone begins (~x=100).
+    inked = np.flatnonzero((pixels[26:44, :250] < 100).any(axis=0))
+    gaps = inked[1:] - inked[:-1]
+    wide = np.flatnonzero(gaps >= 10)
+    assert wide.size >= 1, "date captions run together with no separating gap"
+    assert 40 <= inked[wide[0]] <= 95
