@@ -25,6 +25,8 @@ WIND_SPEED = "wind10_sd_true_prev_point"
 WIND_DIRECTION = "wind10_dr_deg_true_prev_point"
 WARSAW = ZoneInfo("Europe/Warsaw")
 
+_CLOUD_SERIES = ("cldvlow_aver", "cldlow_aver", "cldmed_aver", "cldhigh_aver")
+
 
 def _local(data: MeteogramData) -> list[datetime]:
     return [ts.astimezone(WARSAW) for ts in data.timestamps]
@@ -241,24 +243,18 @@ def test_cloud_shades_follow_grey_scale_steps() -> None:
     shades = _coverage_shades(np.array([0.0, 0.10, 0.25, 0.50, 0.90, 1.0]))
     assert shades.tolist() == [
         [1.0, 1.0, 1.0, 0.0],
-        [0.88, 0.88, 0.88, 1.0],
-        [0.79, 0.79, 0.79, 1.0],
-        [0.64, 0.64, 0.64, 1.0],
-        [0.22, 0.22, 0.22, 1.0],
-        [0.22, 0.22, 0.22, 1.0],
+        [0.82, 0.82, 0.82, 1.0],
+        [0.70, 0.70, 0.70, 1.0],
+        [0.54, 0.54, 0.54, 1.0],
+        [0.18, 0.18, 0.18, 1.0],
+        [0.18, 0.18, 0.18, 1.0],
     ]
 
 
 def test_cloud_band_shades_mean_dense_layers(tmp_path: Path) -> None:
     # Fully overcast in every altitude band must paint the whole panel dark
     pixels = _rendered(
-        _data(
-            hours=24,
-            series={
-                name: tuple(1.0 for _ in range(24))
-                for name in ("cldvlow_aver", "cldlow_aver", "cldmed_aver", "cldhigh_aver")
-            },
-        ),
+        _data(hours=24, series=dict.fromkeys(_CLOUD_SERIES, (1.0,) * 24)),
         tmp_path,
     )
     # Inside the mid-cloud band (2-6 km): a row ~40px below the panel top,

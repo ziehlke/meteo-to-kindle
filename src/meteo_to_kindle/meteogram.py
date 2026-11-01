@@ -62,13 +62,15 @@ _CLOUD_MAX_KM = _CLOUD_BANDS[-1][2]
 
 # Grey scale steps mimicking meteoblue's cloud legend: (lower coverage bound,
 # shade). Coverage below the first step leaves the sky empty (transparent, so
-# the night shading shows through), gaps between layers show clear air.
+# the night shading shows through), gaps between layers show clear air. The
+# lightest step stays clear of NIGHT_SHADE so thin clouds keep some contrast
+# against night, which forces the whole scale a little darker.
 _CLOUD_STEPS = (
-    (0.10, "0.88"),
-    (0.25, "0.79"),
-    (0.50, "0.64"),
-    (0.75, "0.44"),
-    (0.90, "0.22"),
+    (0.10, "0.82"),
+    (0.25, "0.70"),
+    (0.50, "0.54"),
+    (0.75, "0.37"),
+    (0.90, "0.18"),
 )
 
 
@@ -502,33 +504,40 @@ def _coverage_shades(coverage: np.ndarray) -> np.ndarray:
 def _cloud_legend(fig: Figure | SubFigure) -> None:
     """Meteoblue-style grey step legend above the cloud panel's right corner.
 
-    Swatches mirror the band shades; the white first swatch is the <10% clear
-    sky and needs an edge to stay visible on white. Labels sit beneath the
-    swatches like on meteoblue, one per swatch cell.
+    One swatch per grey step, framed like meteoblue's bar, with labels on the
+    swatch boundaries: every label is the lower coverage bound of its cell
+    ("100" closes the last one), so a shade can never read as a different
+    step than the one it renders for.
     """
-    right = _CLOUD_AX[0] + _CLOUD_AX[2]
-    width, height = 0.03, 0.0085
-    row = _CLOUD_AX[1] + _CLOUD_AX[3] + 0.026
-    faces: list[tuple[str, str]] = [("white", GRID)] + [
-        (shade, "none") for _, shade in _CLOUD_STEPS
-    ]
     labels = ("10", "25", "50", "75", "90", "100")
-    total_span = len(labels) * width
-    for index, (label, (face, edge)) in enumerate(zip(labels, faces, strict=True)):
-        left = right - total_span + index * width
+    width, height = 0.03, 0.0085
+    left = _CLOUD_AX[0] + _CLOUD_AX[2] - len(_CLOUD_STEPS) * width
+    row = _CLOUD_AX[1] + _CLOUD_AX[3] + 0.026
+    for index, (_, shade) in enumerate(_CLOUD_STEPS):
         fig.add_artist(
             Rectangle(
-                (left, row),
+                (left + index * width, row),
                 width,
                 height,
                 transform=fig.transFigure,
-                facecolor=face,
-                edgecolor=edge,
-                linewidth=0.4,
+                facecolor=shade,
+                edgecolor="none",
             )
         )
+    fig.add_artist(
+        Rectangle(
+            (left, row),
+            len(_CLOUD_STEPS) * width,
+            height,
+            transform=fig.transFigure,
+            facecolor="none",
+            edgecolor=INK,
+            linewidth=0.5,
+        )
+    )
+    for index, label in enumerate(labels):
         fig.text(
-            left + width / 2,
+            left + index * width,
             row - 0.0025,
             label,
             fontsize=7,
@@ -537,7 +546,7 @@ def _cloud_legend(fig: Figure | SubFigure) -> None:
             va="top",
         )
     fig.text(
-        right - len(labels) * width - 0.012,
+        left - 0.012,
         row + height / 2,
         "Cloud cover (%)",
         fontsize=7.5,
