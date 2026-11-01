@@ -2,8 +2,8 @@
 
 The output is designed for a 600px-wide e-ink display: black-and-gray
 panels stacked like the classic meteo.pl meteogram (temperature, wind,
-precipitation, cloud cover) with a top hour/date axis and day/night
-shading computed from the sun's position.
+precipitation, cloud cover by altitude) with a top hour/date axis and
+day/night shading computed from the sun's position.
 """
 
 import matplotlib
@@ -18,7 +18,9 @@ from zoneinfo import ZoneInfo
 import matplotlib.font_manager
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.figure import Figure, SubFigure
 from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
 from matplotlib.ticker import MaxNLocator, StrMethodFormatter
 
 from .config import FONT_DIR, METEOGRAM_DPI, METEOGRAM_FIGSIZE, TIMEZONE_NAME
@@ -36,13 +38,38 @@ _DIRECTION_ARROWS = ("↑", "↗", "→", "↘", "↓", "↙", "←", "↖")
 
 # Panel rectangles in figure fractions: (left, bottom, width, height); the top
 # block reserves ~65px so date captions, hour labels and unit captions each
-# get their own horizontal band without collisions.
+# get their own horizontal band without collisions. The cloud panel needs the
+# most height after temperature: its altitude bands are only readable if each
+# kilometer gets a few pixels, so wind and precipitation shrink a little.
 _TEMP_AX = (0.105, 0.641, 0.84, 0.257)
-_PRECIP_AX = (0.105, 0.411, 0.84, 0.19)
-_WIND_AX = (0.105, 0.192, 0.84, 0.169)
-_CLOUD_AX = (0.105, 0.02, 0.84, 0.123)
+_PRECIP_AX = (0.105, 0.416, 0.84, 0.185)
+_WIND_AX = (0.105, 0.218, 0.84, 0.152)
+_CLOUD_AX = (0.105, 0.02, 0.84, 0.152)
 
 _MODEL_TITLES = {"um4_60": "UM4 · 60h", "um4_120": "UM4 · 120h", "gfs": "GFS · 240h"}
+
+# Cloud layers drawn meteoblue-style: every model layer fills a fixed
+# altitude band above ground, (series name, base km, top km), and its per-hour
+# coverage maps to a grey scale step - the position shows the altitude and the
+# tone shows the density, so high thin cirrus stays visible over a low deck.
+_CLOUD_BANDS = (
+    ("cldvlow_aver", 0.0, 1.0),  # very low clouds, fog
+    ("cldlow_aver", 1.0, 2.0),
+    ("cldmed_aver", 2.0, 6.0),
+    ("cldhigh_aver", 6.0, 14.0),
+)
+_CLOUD_MAX_KM = _CLOUD_BANDS[-1][2]
+
+# Grey scale steps mimicking meteoblue's cloud legend: (lower coverage bound,
+# shade). Coverage below the first step leaves the sky empty (transparent, so
+# the night shading shows through), gaps between layers show clear air.
+_CLOUD_STEPS = (
+    (0.10, "0.88"),
+    (0.25, "0.79"),
+    (0.50, "0.64"),
+    (0.75, "0.44"),
+    (0.90, "0.22"),
+)
 
 
 def render_meteogram(data: MeteogramData, output: Path) -> Path:
@@ -455,18 +482,97 @@ def _draw_wind(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
         )
 
 
-def _draw_clouds(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
-    """Cloud cover panel: layered very low/low/mid/high fills in grays."""
-    layers = [
-        (_values(data, "cldhigh_aver"), "0.8"),  # drawn first, lightest
-        (_values(data, "cldmed_aver"), "0.55"),
-        (_values(data, "cldlow_aver"), "0.35"),
-        (_values(data, "cldvlow_aver"), "0.15"),  # drawn last, darkest
+def _coverage_shades(coverage: np.ndarray) -> np.ndarray:
+    """One band's per-hour coverage as an (n, 4) grey RGBA row.
+
+    Coverage steps pick meteoblue's grey scale tones; below the first step
+    the cell is transparent (clear sky), so night shading shows through.
+    """
+    bounds, greys = zip(*_CLOUD_STEPS, strict=True)
+    values = np.asarray(greys, dtype=float)
+    levels = np.searchsorted(bounds, coverage, side="right")
+    shades = values[np.clip(levels - 1, 0, len(values) - 1)]
+    clear = levels == 0
+    shades[clear] = 1.0
+    colors = np.repeat(shades[:, None], 4, axis=1)
+    colors[:, 3] = np.where(clear, 0.0, 1.0)
+    return colors
+
+
+def _cloud_legend(fig: Figure | SubFigure) -> None:
+    """Meteoblue-style grey step legend above the cloud panel's right corner.
+
+    Swatches mirror the band shades; the white first swatch is the <10% clear
+    sky and needs an edge to stay visible on white. Labels sit beneath the
+    swatches like on meteoblue, one per swatch cell.
+    """
+    right = _CLOUD_AX[0] + _CLOUD_AX[2]
+    width, height = 0.03, 0.0085
+    row = _CLOUD_AX[1] + _CLOUD_AX[3] + 0.026
+    faces: list[tuple[str, str]] = [("white", GRID)] + [
+        (shade, "none") for _, shade in _CLOUD_STEPS
     ]
-    for coverage, shade in layers:
-        ax.fill_between(
-            hours, 0, np.nan_to_num(coverage, nan=0.0) * 100, color=shade, lw=0
+    labels = ("10", "25", "50", "75", "90", "100")
+    total_span = len(labels) * width
+    for index, (label, (face, edge)) in enumerate(zip(labels, faces, strict=True)):
+        left = right - total_span + index * width
+        fig.add_artist(
+            Rectangle(
+                (left, row),
+                width,
+                height,
+                transform=fig.transFigure,
+                facecolor=face,
+                edgecolor=edge,
+                linewidth=0.4,
+            )
         )
-    ax.set_ylim(0, 100)
-    ax.set_yticks([0, 50, 100])
-    _unit_label(ax, "%", "left")
+        fig.text(
+            left + width / 2,
+            row - 0.0025,
+            label,
+            fontsize=7,
+            family="DejaVu Sans",
+            ha="center",
+            va="top",
+        )
+    fig.text(
+        right - len(labels) * width - 0.012,
+        row + height / 2,
+        "Cloud cover (%)",
+        fontsize=7.5,
+        ha="right",
+        va="center",
+    )
+
+
+def _draw_clouds(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
+    """Cloud panel: fixed altitude bands shaded in meteoblue's grey steps.
+
+    Every band always spans its full layer altitude; only the tone changes
+    with coverage, so reading follows meteoblue: where the grey sits = cloud
+    altitude, how dark = how much of the sky that layer covers.
+    """
+    shades = np.stack(
+        [
+            _coverage_shades(np.nan_to_num(_values(data, name), nan=0.0))
+            for name, *_ in _CLOUD_BANDS
+        ]
+    )
+    mesh = ax.pcolormesh(
+        np.concatenate([hours - 0.5, (hours[-1] + 0.5,)]),
+        (_CLOUD_BANDS[0][1], *(band[2] for band in _CLOUD_BANDS)),
+        shades,
+        shading="flat",
+    )
+    mesh.set_antialiased(False)  # antialiasing shows seams between cells
+
+    # meteoblue keeps this panel free of hour gridlines: they would bleed
+    # through the clear-sky cells and break up the altitude bands.
+    ax.grid(visible=False, axis="x")
+
+    ax.set_ylim(0, _CLOUD_MAX_KM)
+    ax.set_yticks([0, _CLOUD_BANDS[1][2], _CLOUD_BANDS[2][2], _CLOUD_MAX_KM])
+    ax.tick_params(axis="y", labelsize=11)  # thinner panel: keep ticks clear
+    _unit_label(ax, "km", "left")
+    _cloud_legend(ax.figure)

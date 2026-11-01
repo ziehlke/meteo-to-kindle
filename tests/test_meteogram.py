@@ -11,6 +11,7 @@ from PIL import Image
 
 from meteo_to_kindle.meteo import MeteogramData
 from meteo_to_kindle.meteogram import (
+    _coverage_shades,
     _date_labels,
     _draw_header,
     _is_sunlit,
@@ -232,3 +233,35 @@ def test_evening_run_date_captions_remain_separate() -> None:
         assert first.get_window_extent().x1 < second.get_window_extent().x0
     finally:
         plt.close(fig)
+
+
+def test_cloud_shades_follow_grey_scale_steps() -> None:
+    # Clear stays transparent (night shading shows through), the first
+    # step starts at 10% and step bounds belong to the darker neighbor
+    shades = _coverage_shades(np.array([0.0, 0.10, 0.25, 0.50, 0.90, 1.0]))
+    assert shades.tolist() == [
+        [1.0, 1.0, 1.0, 0.0],
+        [0.88, 0.88, 0.88, 1.0],
+        [0.79, 0.79, 0.79, 1.0],
+        [0.64, 0.64, 0.64, 1.0],
+        [0.22, 0.22, 0.22, 1.0],
+        [0.22, 0.22, 0.22, 1.0],
+    ]
+
+
+def test_cloud_band_shades_mean_dense_layers(tmp_path: Path) -> None:
+    # Fully overcast in every altitude band must paint the whole panel dark
+    pixels = _rendered(
+        _data(
+            hours=24,
+            series={
+                name: tuple(1.0 for _ in range(24))
+                for name in ("cldvlow_aver", "cldlow_aver", "cldmed_aver", "cldhigh_aver")
+            },
+        ),
+        tmp_path,
+    )
+    # Inside the mid-cloud band (2-6 km): a row ~40px below the panel top,
+    # mid-panel column - well clear of tick labels and the axis frame
+    patch = pixels[595:605, 315:335]
+    assert float(np.mean(patch)) < 80.0
