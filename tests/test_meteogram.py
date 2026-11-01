@@ -261,3 +261,6 @@ def test_cloud_band_shades_mean_dense_layers(tmp_path: Path) -> None:
     # mid-panel column - well clear of tick labels and the axis frame
     patch = pixels[595:605, 315:335]
     assert float(np.mean(patch)) < 80.0
+    assert float(np.mean(pixels[622:627, 315:335])) < 80.0  # very-low band
+    assert float(np.mean(pixels[614:619, 315:335])) < 80.0  # low band
+    assert float(np.mean(pixels[550:560, 315:335])) < 80.0  # high band
