@@ -9,9 +9,14 @@ import pytest
 from matplotlib import pyplot as plt
 from PIL import Image
 
+from meteo_to_kindle.config import METEOGRAM_DPI, METEOGRAM_FIGSIZE
 from meteo_to_kindle.meteo import MeteogramData
 from meteo_to_kindle.meteogram import (
+    _CLOUD_AX,
+    _CLOUD_MAX_KM,
+    _CLOUD_Y_POWER,
     _cloud_column,
+    _cloud_field,
     _cloud_haze_band,
     _cloud_high_deck,
     _cloud_low_deck,
@@ -22,6 +27,7 @@ from meteo_to_kindle.meteogram import (
     _is_sunlit,
     _night_segments,
     _register_fonts,
+    _smooth_time,
     render_meteogram,
 )
 
@@ -88,6 +94,14 @@ def _rendered(data: MeteogramData, tmp_path: Path) -> np.ndarray:
     assert output == tmp_path / "meteogram.png"
     with Image.open(output) as image:
         return np.array(image.convert("L"))
+
+
+def _cloud_row(altitude: float) -> int:
+    """Pixel row where an altitude plots in the cloud panel, per the stretch."""
+    bottom = (1 - _CLOUD_AX[1]) * METEOGRAM_FIGSIZE[1] * METEOGRAM_DPI
+    span = _CLOUD_AX[3] * METEOGRAM_FIGSIZE[1] * METEOGRAM_DPI
+    display = _CLOUD_MAX_KM * (altitude / _CLOUD_MAX_KM) ** _CLOUD_Y_POWER
+    return round(bottom - display / _CLOUD_MAX_KM * span)
 
 
 def test_render_produces_600x640_image(tmp_path: Path) -> None:
@@ -254,7 +268,8 @@ def test_cloud_haze_band_fades_with_very_low_coverage() -> None:
 
 def test_cloud_ladder_shades_coverage_by_altitude() -> None:
     # The ladder interpolates coverage between the okta-threshold bases and
-    # fades at the low-cloud layer's top when a high deck owns the sky
+    # holds its density to the low-cloud layer's top when a high deck owns
+    # the sky; the wide skirt has faded by the middle band's altitude
     altitudes = np.array([0.5, 2.0, 4.0, 6.0, 8.0])
     column = _cloud_column(
         vlow=0.0,
@@ -265,16 +280,16 @@ def test_cloud_ladder_shades_coverage_by_altitude() -> None:
         bases=(np.nan, 1.0, np.nan, np.nan, np.nan),
         altitudes=altitudes,
     )
-    # clear under the lone weather rung, the deck held down at the layer
-    # top, the mid deck inside its band, a clear gap between the decks,
-    # and the high deck up to its rise
+    # clear under the lone weather rung, the deck dense at the layer top,
+    # the mid deck inside its bump, a clear gap between the decks, and the
+    # high deck full above its rise
     assert column.tolist() == pytest.approx([0.0, 0.4, 0.3, 0.0, 0.5])
 
 
 def test_cloud_column_tops_at_the_real_cloud_top() -> None:
-    # Without a high layer the ladder column tops out at the reported
-    # cloud top: gradated between rungs, dense right below, clear above
-    altitudes = np.array([1.3, 1.5, 2.6, 3.4])
+    # Without a high layer the ladder column holds dense to the reported
+    # cloud top, melts through the skirt just above it and clears past that
+    altitudes = np.array([1.3, 1.5, 3.0, 3.4, 4.8])
     column = _cloud_column(
         vlow=0.0,
         low=1.0,
@@ -285,41 +300,45 @@ def test_cloud_column_tops_at_the_real_cloud_top() -> None:
         altitudes=altitudes,
     )
     # the 4.5-okta rung sits at 1.3 km and the 7.9-okta rung at 1.5 km
-    assert column.tolist() == pytest.approx([0.5625, 0.9875, 1.0, 0.0])
+    assert column.tolist() == pytest.approx([0.5625, 0.9875, 1.0, 0.75, 0.0])
 
 
-def test_cloud_ladder_fades_above_its_highest_base() -> None:
+def test_cloud_ladder_melts_above_its_highest_base() -> None:
     # No high layer and a top barely above the highest rung: the column
-    # fades just above the last ladder anchor instead
+    # caps just past the rung and melts through the wide skirt instead
     anchors = _cloud_low_deck(
         bases=(np.nan, 1.0, np.nan, np.nan, np.nan), low=0.4, high=0.0, top=1.1
     )
-    assert anchors == pytest.approx([(1.0, 0.3125), (1.2, 0.4), (1.4, 0.0)])
+    assert anchors == pytest.approx([(1.0, 0.3125), (1.4, 0.4), (3.0, 0.0)])
 
 
 def test_cloud_low_deck_without_a_ladder_holds_the_layer_top() -> None:
     # GFS runs ship no base ladder: a plain deck held to the model's
-    # low-cloud layer top, fading above it; no low cloud, no deck
+    # low-cloud layer top, melting into the sky above; no low cloud, no deck
     anchors = _cloud_low_deck(bases=(np.nan,) * 5, low=0.6, high=0.0, top=float("nan"))
-    assert anchors == pytest.approx([(0.0, 0.6), (2.0, 0.6), (2.4, 0.0)])
+    assert anchors == pytest.approx([(0.0, 0.6), (2.0, 0.6), (3.6, 0.0)])
     assert _cloud_low_deck(bases=(np.nan,) * 5, low=0.0, high=0.0, top=3.0) == []
 
 
 def test_cloud_mid_deck_fills_its_band() -> None:
     assert _cloud_mid_deck(0.0) == []
     assert _cloud_mid_deck(0.3) == pytest.approx(
-        [(2.4, 0.0), (3.5, 0.3), (5.0, 0.3), (5.5, 0.0)]
+        [(2.4, 0.0), (3.5, 0.3), (4.4, 0.3), (5.5, 0.0)]
     )
 
 
 def test_cloud_high_deck_rises_to_the_cloud_top() -> None:
-    # Full from the climb through the cap, then a quick fade above the
-    # reported top; tops at or past the rim clip instead of fading
+    # Full from the climb through the reported top, then a skirt melts the
+    # deck into the sky above; tops at or past the rim clip instead, and
+    # tops that never get past the rise read as low-deck sky
     assert _cloud_high_deck(0.5, 9.5) == pytest.approx(
-        [(6.25, 0.0), (7.25, 0.5), (9.25, 0.5), (9.5, 0.5), (9.75, 0.0)]
+        [(6.0, 0.0), (7.0, 0.5), (9.5, 0.5), (10.5, 0.0)]
+    )
+    assert _cloud_high_deck(0.5, 13.2) == pytest.approx(
+        [(6.0, 0.0), (7.0, 0.5), (13.2, 0.5), (14.0, 0.0)]
     )
     assert _cloud_high_deck(0.5, 14.0) == pytest.approx(
-        [(6.25, 0.0), (7.25, 0.5), (14.0, 0.5)]
+        [(6.0, 0.0), (7.0, 0.5), (14.0, 0.5)]
     )
     assert _cloud_high_deck(0.0, 9.5) == []  # no high layer, no deck
     assert _cloud_high_deck(0.5, 7.0) == []  # top below the rise: low-deck sky
@@ -328,7 +347,7 @@ def test_cloud_high_deck_rises_to_the_cloud_top() -> None:
 def test_cloud_high_deck_without_a_top_holds_the_rim() -> None:
     # GFS runs report no cloud top: the deck holds to the panel rim
     assert _cloud_high_deck(0.5, float("nan")) == pytest.approx(
-        [(6.25, 0.0), (7.25, 0.5), (14.0, 0.5)]
+        [(6.0, 0.0), (7.0, 0.5), (14.0, 0.5)]
     )
 
 
@@ -341,17 +360,37 @@ def test_cloud_surface_sorts_unordered_anchors() -> None:
     assert _cloud_surface(anchors, grid).tolist() == pytest.approx([0.5, 0.375])
 
 
+def test_cloud_time_smoothing_blends_neighbouring_hours() -> None:
+    # One binomial pass softens an hour-to-hour spike; the edges mirror so
+    # the end hours keep their coverage
+    field = np.array([[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]])
+    assert _smooth_time(field, 1).ravel().tolist() == pytest.approx(
+        [0.25, 0.5, 0.25, 0.25, 0.5, 0.25]
+    )
+
+
+def test_cloud_field_stretches_the_altitude_axis() -> None:
+    # Contouring plots altitudes on meteoblue's stretched axis, spreading
+    # the low sky: midway up the true column plots above its true share
+    data = _data(hours=2)
+    heights, _ = _cloud_field(data)
+    altitudes = np.linspace(0.0, _CLOUD_MAX_KM, len(heights))
+    mid = len(heights) // 2
+    assert heights[mid] == pytest.approx(
+        _CLOUD_MAX_KM * (float(altitudes[mid]) / _CLOUD_MAX_KM) ** _CLOUD_Y_POWER
+    )
+    assert heights[mid] > float(altitudes[mid])
+
+
 def test_cloud_shades_mean_dense_columns(tmp_path: Path) -> None:
-    # Fully overcast in every deck must paint the whole panel dark
+    # Fully overcast in every deck must paint each deck's dense core dark
     pixels = _rendered(
         _data(hours=24, series=dict.fromkeys(_CLOUD_SERIES, (1.0,) * 24)),
         tmp_path,
     )
-    # Rows inside the fog strip, the ladder deck, the mid deck band and
-    # the high deck, at a mid-panel hour clear of tick labels and the
-    # axis frame
-    patch = pixels[595:605, 315:335]
-    assert float(np.mean(patch)) < 80.0
-    assert float(np.mean(pixels[622:627, 315:335])) < 80.0  # fog strip
-    assert float(np.mean(pixels[614:619, 315:335])) < 80.0  # ladder deck
-    assert float(np.mean(pixels[550:560, 315:335])) < 80.0  # high deck
+    # Rows centred on the fog strip, the ladder deck before its skirt, the
+    # middle bump and the high deck, at a mid-panel hour clear of tick
+    # labels and the axis frame
+    for altitude in (0.3, 1.7, 3.9, 9.5):
+        row = _cloud_row(altitude)
+        assert float(np.mean(pixels[row - 2 : row + 3, 315:335])) < 80.0
