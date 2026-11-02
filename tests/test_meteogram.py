@@ -11,7 +11,12 @@ from PIL import Image
 
 from meteo_to_kindle.meteo import MeteogramData
 from meteo_to_kindle.meteogram import (
-    _coverage_shades,
+    _cloud_column,
+    _cloud_haze_band,
+    _cloud_high_deck,
+    _cloud_low_deck,
+    _cloud_mid_deck,
+    _cloud_surface,
     _date_labels,
     _draw_header,
     _is_sunlit,
@@ -61,6 +66,12 @@ def _data(
         "cldlow_aver": tuple(0.4 for _ in range(hours)),
         "cldmed_aver": tuple(0.3 for _ in range(hours)),
         "cldhigh_aver": tuple(0.1 for _ in range(hours)),
+        "cldbse01": tuple(0.95 for _ in range(hours)),
+        "cldbse25": tuple(1.05 for _ in range(hours)),
+        "cldbse45": tuple(1.15 for _ in range(hours)),
+        "cldbse65": tuple(1.25 for _ in range(hours)),
+        "cldbse79": tuple(1.35 for _ in range(hours)),
+        "cldtop": tuple(11.5 for _ in range(hours)),
     }
     return MeteogramData(
         model="um4_60",
@@ -237,30 +248,110 @@ def test_evening_run_date_captions_remain_separate() -> None:
         plt.close(fig)
 
 
-def test_cloud_shades_follow_grey_scale_steps() -> None:
-    # Clear stays transparent (night shading shows through), the first
-    # step starts at 10% and step bounds belong to the darker neighbor
-    shades = _coverage_shades(np.array([0.0, 0.10, 0.25, 0.50, 0.90, 1.0]))
-    assert shades.tolist() == [
-        [1.0, 1.0, 1.0, 0.0],
-        [0.82, 0.82, 0.82, 1.0],
-        [0.70, 0.70, 0.70, 1.0],
-        [0.54, 0.54, 0.54, 1.0],
-        [0.18, 0.18, 0.18, 1.0],
-        [0.18, 0.18, 0.18, 1.0],
-    ]
+def test_cloud_haze_band_fades_with_very_low_coverage() -> None:
+    assert _cloud_haze_band(0.6) == pytest.approx([(0.0, 0.6), (0.7, 0.6), (1.2, 0.0)])
 
 
-def test_cloud_band_shades_mean_dense_layers(tmp_path: Path) -> None:
-    # Fully overcast in every altitude band must paint the whole panel dark
+def test_cloud_ladder_shades_coverage_by_altitude() -> None:
+    # The ladder interpolates coverage between the okta-threshold bases and
+    # fades at the low-cloud layer's top when a high deck owns the sky
+    altitudes = np.array([0.5, 2.0, 4.0, 6.0, 8.0])
+    column = _cloud_column(
+        vlow=0.0,
+        low=0.4,
+        med=0.3,
+        high=0.5,
+        top=9.5,
+        bases=(np.nan, 1.0, np.nan, np.nan, np.nan),
+        altitudes=altitudes,
+    )
+    # clear under the lone weather rung, the deck held down at the layer
+    # top, the mid deck inside its band, a clear gap between the decks,
+    # and the high deck up to its rise
+    assert column.tolist() == pytest.approx([0.0, 0.4, 0.3, 0.0, 0.5])
+
+
+def test_cloud_column_tops_at_the_real_cloud_top() -> None:
+    # Without a high layer the ladder column tops out at the reported
+    # cloud top: gradated between rungs, dense right below, clear above
+    altitudes = np.array([1.3, 1.5, 2.6, 3.4])
+    column = _cloud_column(
+        vlow=0.0,
+        low=1.0,
+        med=0.0,
+        high=0.0,
+        top=3.0,
+        bases=(0.5, 0.8, 1.3, 1.4, 1.5),
+        altitudes=altitudes,
+    )
+    # the 4.5-okta rung sits at 1.3 km and the 7.9-okta rung at 1.5 km
+    assert column.tolist() == pytest.approx([0.5625, 0.9875, 1.0, 0.0])
+
+
+def test_cloud_ladder_fades_above_its_highest_base() -> None:
+    # No high layer and a top barely above the highest rung: the column
+    # fades just above the last ladder anchor instead
+    anchors = _cloud_low_deck(
+        bases=(np.nan, 1.0, np.nan, np.nan, np.nan), low=0.4, high=0.0, top=1.1
+    )
+    assert anchors == pytest.approx([(1.0, 0.3125), (1.2, 0.4), (1.4, 0.0)])
+
+
+def test_cloud_low_deck_without_a_ladder_holds_the_layer_top() -> None:
+    # GFS runs ship no base ladder: a plain deck held to the model's
+    # low-cloud layer top, fading above it; no low cloud, no deck
+    anchors = _cloud_low_deck(bases=(np.nan,) * 5, low=0.6, high=0.0, top=float("nan"))
+    assert anchors == pytest.approx([(0.0, 0.6), (2.0, 0.6), (2.4, 0.0)])
+    assert _cloud_low_deck(bases=(np.nan,) * 5, low=0.0, high=0.0, top=3.0) == []
+
+
+def test_cloud_mid_deck_fills_its_band() -> None:
+    assert _cloud_mid_deck(0.0) == []
+    assert _cloud_mid_deck(0.3) == pytest.approx(
+        [(2.4, 0.0), (3.5, 0.3), (5.0, 0.3), (5.5, 0.0)]
+    )
+
+
+def test_cloud_high_deck_rises_to_the_cloud_top() -> None:
+    # Full from the climb through the cap, then a quick fade above the
+    # reported top; tops at or past the rim clip instead of fading
+    assert _cloud_high_deck(0.5, 9.5) == pytest.approx(
+        [(6.25, 0.0), (7.25, 0.5), (9.25, 0.5), (9.5, 0.5), (9.75, 0.0)]
+    )
+    assert _cloud_high_deck(0.5, 14.0) == pytest.approx(
+        [(6.25, 0.0), (7.25, 0.5), (14.0, 0.5)]
+    )
+    assert _cloud_high_deck(0.0, 9.5) == []  # no high layer, no deck
+    assert _cloud_high_deck(0.5, 7.0) == []  # top below the rise: low-deck sky
+
+
+def test_cloud_high_deck_without_a_top_holds_the_rim() -> None:
+    # GFS runs report no cloud top: the deck holds to the panel rim
+    assert _cloud_high_deck(0.5, float("nan")) == pytest.approx(
+        [(6.25, 0.0), (7.25, 0.5), (14.0, 0.5)]
+    )
+
+
+def test_cloud_surface_sorts_unordered_anchors() -> None:
+    # Real data can report a base above the layer cap; sorting the anchors
+    # keeps the interpolation ordered where that happens
+    grid = np.array([1.0, 2.1])
+    anchors = [(0.0, 0.5), (2.4, 0.0), (2.0, 0.5)]
+    # the deck holds through 2.0 km and fades by 2.4 km
+    assert _cloud_surface(anchors, grid).tolist() == pytest.approx([0.5, 0.375])
+
+
+def test_cloud_shades_mean_dense_columns(tmp_path: Path) -> None:
+    # Fully overcast in every deck must paint the whole panel dark
     pixels = _rendered(
         _data(hours=24, series=dict.fromkeys(_CLOUD_SERIES, (1.0,) * 24)),
         tmp_path,
     )
-    # Inside the mid-cloud band (2-6 km): a row ~40px below the panel top,
-    # mid-panel column - well clear of tick labels and the axis frame
+    # Rows inside the fog strip, the ladder deck, the mid deck band and
+    # the high deck, at a mid-panel hour clear of tick labels and the
+    # axis frame
     patch = pixels[595:605, 315:335]
     assert float(np.mean(patch)) < 80.0
-    assert float(np.mean(pixels[622:627, 315:335])) < 80.0  # very-low band
-    assert float(np.mean(pixels[614:619, 315:335])) < 80.0  # low band
-    assert float(np.mean(pixels[550:560, 315:335])) < 80.0  # high band
+    assert float(np.mean(pixels[622:627, 315:335])) < 80.0  # fog strip
+    assert float(np.mean(pixels[614:619, 315:335])) < 80.0  # ladder deck
+    assert float(np.mean(pixels[550:560, 315:335])) < 80.0  # high deck

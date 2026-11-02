@@ -48,23 +48,10 @@ _CLOUD_AX = (0.105, 0.02, 0.84, 0.152)
 
 _MODEL_TITLES = {"um4_60": "UM4 · 60h", "um4_120": "UM4 · 120h", "gfs": "GFS · 240h"}
 
-# Cloud layers drawn meteoblue-style: every model layer fills a fixed
-# altitude band above ground, (series name, base km, top km), and its per-hour
-# coverage maps to a grey scale step - the position shows the altitude and the
-# tone shows the density, so high thin cirrus stays visible over a low deck.
-_CLOUD_BANDS = (
-    ("cldvlow_aver", 0.0, 1.0),  # very low clouds, fog
-    ("cldlow_aver", 1.0, 2.0),
-    ("cldmed_aver", 2.0, 6.0),
-    ("cldhigh_aver", 6.0, 14.0),
-)
-_CLOUD_MAX_KM = _CLOUD_BANDS[-1][2]
-
 # Grey scale steps mimicking meteoblue's cloud legend: (lower coverage bound,
-# shade). Coverage below the first step leaves the sky empty (transparent, so
-# the night shading shows through), gaps between layers show clear air. The
-# lightest step stays clear of NIGHT_SHADE so thin clouds keep some contrast
-# against night, which forces the whole scale a little darker.
+# shade). Coverage below the first step stays transparent, so the night
+# shading shows through, and the lightest step stays clear of NIGHT_SHADE so
+# thin clouds keep some contrast against night.
 _CLOUD_STEPS = (
     (0.10, "0.82"),
     (0.25, "0.70"),
@@ -72,6 +59,35 @@ _CLOUD_STEPS = (
     (0.75, "0.37"),
     (0.90, "0.18"),
 )
+
+# The panel draws coverage as a meteoblue-style contoured field: per hour the
+# vertical profile is rebuilt from the model's own summaries and the four
+# resulting decks merge densest-first. Meteo ICM provides the pieces only in
+# UM runs - GFS ships just the layer coverages, handled by the fallbacks:
+# - cldbse01..cldbse79 = base (km) of cloud covering more than 0.1/2.5/4.5/
+#   6.5/7.9 oktas: a real coverage-per-altitude ladder for the lowest deck
+# - cldtop = top (km) of the tallest cloud in the column
+# - cldvlow/low/med/high_aver = total sky coverage of the model layers
+_CLOUD_LADDER = (
+    ("cldbse01", 0.1 / 8),
+    ("cldbse25", 2.5 / 8),
+    ("cldbse45", 4.5 / 8),
+    ("cldbse65", 6.5 / 8),
+    ("cldbse79", 7.9 / 8),
+)
+_CLOUD_MAX_KM = 14.0  # panel rim; deep-convective tops clip here
+_CLOUD_FIELD_ROWS = 281  # altitude steps along the rim, ~50 m apart
+_CLOUD_HAZE_BAND = (0.7, 1.2)  # fog strip: held above ground, then faded, km
+_CLOUD_LOW_TOP_KM = 2.0  # top of the model's low-cloud layer
+_CLOUD_LOW_EDGE_KM = 0.4  # vertical thickness of deck fades, km
+_CLOUD_MED_BAND = (2.4, 3.5, 5.0, 5.5)  # mid deck: edge, full, full, edge, km
+_CLOUD_HIGH_BASE_KM = 6.0  # high decks stay clear below this (and the y-tick)
+_CLOUD_HIGH_RISE_KM = 1.0  # climb from the high base to full coverage, km
+_CLOUD_HIGH_EDGE_KM = 0.25  # thickness of the high deck's clear edge and cap
+# Contour levels between the grey steps: every value paints its step's shade,
+# below 10% nothing paints and the night shading shows through.
+_CLOUD_LEVELS = (0.0, *(bound for bound, _ in _CLOUD_STEPS), 1.0)
+_CLOUD_LEVEL_COLORS = ("none", *(shade for _, shade in _CLOUD_STEPS))
 
 
 def render_meteogram(data: MeteogramData, output: Path) -> Path:
@@ -484,21 +500,154 @@ def _draw_wind(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
         )
 
 
-def _coverage_shades(coverage: np.ndarray) -> np.ndarray:
-    """One band's per-hour coverage as an (n, 4) grey RGBA row.
+def _cloud_haze_band(vlow: float) -> list[tuple[float, float]]:
+    """Deck anchors for the near-surface fog strip at the very-low coverage."""
+    hold, fade = _CLOUD_HAZE_BAND
+    return [(0.0, vlow), (hold, vlow), (fade, 0.0)]
 
-    Coverage steps pick meteoblue's grey scale tones; below the first step
-    the cell is transparent (clear sky), so night shading shows through.
+
+def _cloud_low_deck(
+    bases: tuple[float, ...], low: float, high: float, top: float
+) -> list[tuple[float, float]]:
+    """Deck anchors for the lowest clouds, from the okta-coverage base ladder.
+
+    Every ladder base sits at the altitude where this hour's coverage
+    crosses its okta threshold, so interpolating between the anchors shades
+    the deck light-to-dense the way meteoblue's panels do. The deck then
+    fades out at the model's low-cloud top when a separate high deck owns
+    the sky above, else at the reported cloud top when that towers above
+    the ladder, else just above the highest reported base. Runs without a
+    ladder (GFS) fall back to a plain deck held at the layer top.
     """
-    bounds, greys = zip(*_CLOUD_STEPS, strict=True)
-    values = np.asarray(greys, dtype=float)
-    levels = np.searchsorted(bounds, coverage, side="right")
-    shades = values[np.clip(levels - 1, 0, len(values) - 1)]
-    clear = levels == 0
-    shades[clear] = 1.0
-    colors = np.repeat(shades[:, None], 4, axis=1)
-    colors[:, 3] = np.where(clear, 0.0, 1.0)
-    return colors
+    anchors: list[tuple[float, float]] = [
+        (float(base), threshold)
+        for (_, threshold), base in zip(_CLOUD_LADDER, bases, strict=True)
+        if np.isfinite(base)
+    ]
+    if not anchors:
+        if low <= 0.0:
+            return []
+        return [
+            (0.0, low),
+            (_CLOUD_LOW_TOP_KM, low),
+            (_CLOUD_LOW_TOP_KM + _CLOUD_LOW_EDGE_KM, 0.0),
+        ]
+    low = max(anchors[-1][1], low)
+    peak = anchors[-1][0]
+    if high > 0.0 and not (np.isfinite(top) and top <= 4.0):
+        # the reported top belongs to the high deck, not to this column
+        anchors += [
+            (_CLOUD_LOW_TOP_KM, low),
+            (_CLOUD_LOW_TOP_KM + _CLOUD_LOW_EDGE_KM, 0.0),
+        ]
+    elif np.isfinite(top) and top > peak + _CLOUD_LOW_EDGE_KM:
+        # the ladder column is the whole deck: it tops out at the cloud top
+        ceiling = min(top, _CLOUD_MAX_KM)
+        anchors += [(ceiling - _CLOUD_LOW_EDGE_KM, low), (ceiling, 0.0)]
+    else:
+        anchors += [
+            (peak + _CLOUD_LOW_EDGE_KM / 2, low),
+            (peak + _CLOUD_LOW_EDGE_KM, 0.0),
+        ]
+    return anchors
+
+
+def _cloud_mid_deck(med: float) -> list[tuple[float, float]]:
+    """Deck anchors for the middle deck: a soft-edged block by altitude."""
+    if med <= 0.0:
+        return []
+    edge, filled, until, top = _CLOUD_MED_BAND
+    return [(edge, 0.0), (filled, med), (until, med), (top, 0.0)]
+
+
+def _cloud_high_deck(high: float, top: float) -> list[tuple[float, float]]:
+    """Deck anchors for the high deck, rising to the reported cloud top.
+
+    Runs without a cloud top (GFS) hold the deck to the panel rim like the
+    fixed bands they replace; tops that never climb past the rise read as
+    low-deck weather instead of a deck high in the column.
+    """
+    if high <= 0.0:
+        return []
+    start = _CLOUD_HIGH_BASE_KM + _CLOUD_HIGH_EDGE_KM
+    full = start + _CLOUD_HIGH_RISE_KM
+    if not np.isfinite(top):
+        return [(start, 0.0), (full, high), (_CLOUD_MAX_KM, high)]
+    if top < full:
+        return []
+    ceiling = min(top, _CLOUD_MAX_KM)
+    if ceiling >= _CLOUD_MAX_KM:
+        return [(start, 0.0), (full, high), (ceiling, high)]
+    return [
+        (start, 0.0),
+        (full, high),
+        (ceiling - _CLOUD_HIGH_EDGE_KM, high),
+        (ceiling, high),
+        (ceiling + _CLOUD_HIGH_EDGE_KM, 0.0),
+    ]
+
+
+def _cloud_surface(
+    anchors: list[tuple[float, float]], altitudes: np.ndarray
+) -> np.ndarray:
+    """Interpolate one deck's anchors onto the altitude grid, sorted first."""
+    if not anchors:
+        return np.zeros_like(altitudes)
+    heights, coverages = zip(*sorted(anchors), strict=True)
+    return np.interp(altitudes, heights, coverages, left=0.0, right=0.0)
+
+
+def _cloud_column(
+    vlow: float,
+    low: float,
+    med: float,
+    high: float,
+    top: float,
+    bases: tuple[float, ...],
+    altitudes: np.ndarray,
+) -> np.ndarray:
+    """Coverage (0-1) by altitude for one hour: the densest deck wins."""
+    surfaces = [
+        _cloud_surface(anchors, altitudes)
+        for anchors in (
+            _cloud_haze_band(vlow),
+            _cloud_low_deck(bases, low, high, top),
+            _cloud_mid_deck(med),
+            _cloud_high_deck(high, top),
+        )
+    ]
+    return np.clip(np.maximum.reduce(surfaces), 0.0, 1.0)
+
+
+def _cloud_field(data: MeteogramData) -> tuple[np.ndarray, np.ndarray]:
+    """Rebuild the coverage field, shape (altitude, hour), plus its grid.
+
+    Meteo ICM provides the vertical structure only as summaries, so each
+    hour merges the densest of the rebuilt decks: the near-surface haze,
+    the base-ladder column, the middle deck band and the high deck up to
+    the reported cloud top. What the model layers leave open between them
+    shows as clear-air gaps, exactly like meteoblue's panels.
+    """
+    vlow, low, med, high = (
+        np.nan_to_num(_values(data, name), nan=0.0)
+        for name in ("cldvlow_aver", "cldlow_aver", "cldmed_aver", "cldhigh_aver")
+    )
+    bases = tuple(_values(data, f"cldbse{suffix}") for suffix, _ in _CLOUD_LADDER)
+    cloud_tops = _values(data, "cldtop")
+    altitudes = np.linspace(0.0, _CLOUD_MAX_KM, _CLOUD_FIELD_ROWS)
+    columns = [
+        _cloud_column(
+            float(vlow[index]),
+            float(low[index]),
+            float(med[index]),
+            float(high[index]),
+            float(cloud_tops[index]),
+            tuple(float(base[index]) for base in bases),
+            altitudes,
+        )
+        for index in range(len(data.timestamps))
+    ]
+    return altitudes, np.column_stack(columns)
 
 
 def _cloud_legend(fig: Figure | SubFigure) -> None:
@@ -556,32 +705,34 @@ def _cloud_legend(fig: Figure | SubFigure) -> None:
 
 
 def _draw_clouds(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
-    """Cloud panel: fixed altitude bands shaded in meteoblue's grey steps.
+    """Cloud panel: coverage contoured over altitude, meteoblue-style.
 
-    Every band always spans its full layer altitude; only the tone changes
-    with coverage, so reading follows meteoblue: where the grey sits = cloud
-    altitude, how dark = how much of the sky that layer covers.
+    The rebuilt profile (see _cloud_field) is contoured through the grey
+    steps, so where the grey sits reads as the cloud's altitude, the tone
+    as its density, and the deck gradations, tower shapes and clear-air
+    gaps between decks come from the data instead of fixed altitude bands.
     """
-    shades = np.stack(
-        [
-            _coverage_shades(np.nan_to_num(_values(data, name), nan=0.0))
-            for name, *_ in _CLOUD_BANDS
-        ]
+    altitudes, field = _cloud_field(data)
+    if len(hours) > 1:
+        positions, coverage = hours, field
+    else:
+        # contouring needs a 2x2 grid: repeat the lone hour's column so it
+        # paints the whole panel width, like the bands did
+        positions, coverage = (-0.5, 0.5), np.repeat(field, 2, axis=1)
+    ax.contourf(
+        positions,
+        altitudes,
+        coverage,
+        levels=_CLOUD_LEVELS,
+        colors=_CLOUD_LEVEL_COLORS,
     )
-    mesh = ax.pcolormesh(
-        np.concatenate([hours - 0.5, (hours[-1] + 0.5,)]),
-        (_CLOUD_BANDS[0][1], *(band[2] for band in _CLOUD_BANDS)),
-        shades,
-        shading="flat",
-    )
-    mesh.set_antialiased(False)  # antialiasing shows seams between cells
 
     # meteoblue keeps this panel free of hour gridlines: they would bleed
     # through the clear-sky cells and break up the altitude bands.
     ax.grid(visible=False, axis="x")
 
     ax.set_ylim(0, _CLOUD_MAX_KM)
-    ax.set_yticks([0, _CLOUD_BANDS[1][2], _CLOUD_BANDS[2][2], _CLOUD_MAX_KM])
+    ax.set_yticks([0, _CLOUD_LOW_TOP_KM, _CLOUD_HIGH_BASE_KM, _CLOUD_MAX_KM])
     ax.tick_params(axis="y", labelsize=11)  # thinner panel: keep ticks clear
     _unit_label(ax, "km", "left")
     _cloud_legend(ax.figure)
