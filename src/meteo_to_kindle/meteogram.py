@@ -80,12 +80,11 @@ _CLOUD_FIELD_ROWS = 281  # altitude steps along the rim, ~50 m apart
 _CLOUD_HAZE_BAND = (0.7, 1.2)  # fog strip: held above ground, then faded, km
 _CLOUD_LOW_TOP_KM = 2.0  # top of the model's low-cloud layer
 _CLOUD_LOW_CAP_KM = 0.4  # ladder columns overshoot their highest rung by this, km
-_CLOUD_LOW_EDGE_KM = 1.6  # skirt melting the low deck into the sky above, km
-_CLOUD_MED_BAND = (2.4, 3.5, 4.4, 5.5)  # mid deck bump: edge, full, full, edge, km
+_CLOUD_LOW_EDGE_KM = 0.4  # vertical thickness of deck fades, km
+_CLOUD_MED_BAND = (2.4, 3.5, 5.0, 5.5)  # mid deck: edge, full, full, edge, km
 _CLOUD_HIGH_BASE_KM = 6.0  # high decks stay clear below this (and the y-tick)
 _CLOUD_HIGH_RISE_KM = 1.0  # climb from the high base to full coverage, km
-_CLOUD_HIGH_EDGE_KM = 1.0  # skirt melting the high deck above its ceiling, km
-_CLOUD_Y_POWER = 0.75  # meteoblue's altitude axis: low sky spread, tops squashed
+_CLOUD_HIGH_EDGE_KM = 0.25  # thickness of the high deck's clear edge and cap
 _CLOUD_SMOOTH_PASSES = 2  # time-axis passes: melt hourly tables into blobs
 # Contour levels between the grey steps: every value paints its step's shade,
 # below 10% nothing paints and the night shading shows through.
@@ -564,26 +563,25 @@ def _cloud_mid_deck(med: float) -> list[tuple[float, float]]:
 def _cloud_high_deck(high: float, top: float) -> list[tuple[float, float]]:
     """Deck anchors for the high deck, rising to the reported cloud top.
 
-    The deck lifts off the high-base tick and climbs to full coverage by
-    the rise, holds to the reported cloud top and melts into the sky above
-    through a skirt. Runs without a cloud top (GFS) hold the deck to the
-    panel rim like the fixed bands they replace; tops that never climb
-    past the rise read as low-deck weather instead of a deck high in the
-    column.
+    The deck stays clear below the high base, climbs to full coverage by
+    the rise and tops out at the reported cloud top with a quick fade.
+    Runs without a cloud top (GFS) hold the deck to the panel rim like the
+    fixed bands they replace; tops that never climb past the rise read as
+    low-deck weather instead of a deck high in the column.
     """
     if high <= 0.0:
         return []
-    base = _CLOUD_HIGH_BASE_KM
-    full = base + _CLOUD_HIGH_RISE_KM
+    start = _CLOUD_HIGH_BASE_KM + _CLOUD_HIGH_EDGE_KM
+    full = start + _CLOUD_HIGH_RISE_KM
     if not np.isfinite(top):
-        return [(base, 0.0), (full, high), (_CLOUD_MAX_KM, high)]
+        return [(start, 0.0), (full, high), (_CLOUD_MAX_KM, high)]
     if top <= full:
         return []
     ceiling = min(top, _CLOUD_MAX_KM)
     if ceiling >= _CLOUD_MAX_KM:
-        return [(base, 0.0), (full, high), (ceiling, high)]
+        return [(start, 0.0), (full, high), (ceiling, high)]
     return [
-        (base, 0.0),
+        (start, 0.0),
         (full, high),
         (ceiling, high),
         (min(ceiling + _CLOUD_HIGH_EDGE_KM, _CLOUD_MAX_KM), 0.0),
@@ -637,16 +635,16 @@ def _smooth_time(coverage: np.ndarray, passes: int) -> np.ndarray:
 
 
 def _cloud_field(data: MeteogramData) -> tuple[np.ndarray, np.ndarray]:
-    """Rebuild the coverage field, shape (altitude, hour), plus its plot grid.
+    """Rebuild the coverage field, shape (altitude, hour), plus its grid.
 
     Meteo ICM provides the vertical structure only as summaries, so each
     hour merges the densest of the rebuilt decks: the near-surface haze,
     the base-ladder column, the middle deck band and the high deck up to
     the reported cloud top. The columns blend along time through
-    _smooth_time, and the grid returned for contouring maps altitudes onto
-    meteoblue's stretched axis through _CLOUD_Y_POWER, spreading the low
-    sky where the decks live. What the model layers leave open between
-    them shows as clear-air gaps, exactly like meteoblue's panels.
+    _smooth_time, melting the hourly steps into drifting decks; the grid
+    returned for contouring is the true altitude axis. What the model
+    layers leave open between them shows as clear-air gaps, exactly like
+    meteoblue's panels.
     """
     vlow, low, med, high = (
         np.nan_to_num(_values(data, name), nan=0.0)
@@ -667,9 +665,8 @@ def _cloud_field(data: MeteogramData) -> tuple[np.ndarray, np.ndarray]:
         )
         for index in range(len(data.timestamps))
     ]
-    smoothed = _smooth_time(np.column_stack(columns), _CLOUD_SMOOTH_PASSES)
-    heights = _CLOUD_MAX_KM * (altitudes / _CLOUD_MAX_KM) ** _CLOUD_Y_POWER
-    return heights, smoothed
+    field = _smooth_time(np.column_stack(columns), _CLOUD_SMOOTH_PASSES)
+    return altitudes, field
 
 
 def _cloud_legend(fig: Figure | SubFigure) -> None:
@@ -730,12 +727,12 @@ def _draw_clouds(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
     """Cloud panel: coverage contoured over altitude, meteoblue-style.
 
     The rebuilt profile (see _cloud_field) is contoured through the grey
-    steps on meteoblue's stretched altitude axis, so where the grey sits
-    reads as the cloud's altitude, the tone as its density, and the lens
-    shapes, deck gradations and clear-air gaps between decks come from the
+    steps over the true-km altitude axis, so where the grey sits reads as
+    the cloud's altitude, the tone as its density, and the floating deck
+    islands, gradations and clear-air gaps between decks come from the
     data instead of fixed altitude bands.
     """
-    heights, field = _cloud_field(data)
+    altitudes, field = _cloud_field(data)
     if len(hours) > 1:
         positions, coverage = hours, field
     else:
@@ -744,7 +741,7 @@ def _draw_clouds(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
         positions, coverage = (-0.5, 0.5), np.repeat(field, 2, axis=1)
     ax.contourf(
         positions,
-        heights,
+        altitudes,
         coverage,
         levels=_CLOUD_LEVELS,
         colors=_CLOUD_LEVEL_COLORS,
@@ -755,14 +752,7 @@ def _draw_clouds(ax: plt.Axes, data: MeteogramData, hours: np.ndarray) -> None:
     ax.grid(visible=False, axis="x")
 
     ax.set_ylim(0, _CLOUD_MAX_KM)
-    # ticks sit at their display altitudes on the stretched axis, labelled
-    # in true km: the low sky spreads where the decks live, the top squashes
-    ticks = [
-        _CLOUD_MAX_KM * (km / _CLOUD_MAX_KM) ** _CLOUD_Y_POWER
-        for km in (0.0, _CLOUD_LOW_TOP_KM, _CLOUD_HIGH_BASE_KM, _CLOUD_MAX_KM)
-    ]
-    ax.set_yticks(ticks)
-    ax.set_yticklabels(("0", "2", "6", "14"))
+    ax.set_yticks([0, _CLOUD_LOW_TOP_KM, _CLOUD_HIGH_BASE_KM, _CLOUD_MAX_KM])
     ax.tick_params(axis="y", labelsize=11)  # thinner panel: keep ticks clear
     _unit_label(ax, "km", "left")
     _cloud_legend(ax.figure)
