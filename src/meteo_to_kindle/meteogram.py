@@ -521,8 +521,10 @@ def _cloud_low_deck(
     the sky above, else to the reported cloud top when that towers above
     the ladder, else just past the highest reported base, and a wide skirt
     fades it into the sky above, so neighbouring hours merge into
-    meteoblue's lens shapes. Runs without a ladder (GFS) fall back to a
-    plain deck held at the layer top with the same skirt.
+    meteoblue's lens shapes; the sky-owning case never fades below the
+    ladder's highest base, which can tower over the layer. Runs without a
+    ladder (GFS) fall back to a plain deck held at the layer top with the
+    same skirt.
     """
     anchors: list[tuple[float, float]] = [
         (float(base), threshold)
@@ -541,7 +543,7 @@ def _cloud_low_deck(
     peak = anchors[-1][0]
     if high > 0.0 and not (np.isfinite(top) and top <= 4.0):
         # the reported top belongs to the high deck, not to this column
-        deck_top = _CLOUD_LOW_TOP_KM
+        deck_top = max(_CLOUD_LOW_TOP_KM, peak)
     elif np.isfinite(top) and top > peak + _CLOUD_LOW_CAP_KM:
         # the ladder column is the whole deck: it tops out at the cloud top
         deck_top = min(top, _CLOUD_MAX_KM)

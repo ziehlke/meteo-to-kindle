@@ -312,6 +312,18 @@ def test_cloud_ladder_melts_above_its_highest_base() -> None:
     assert anchors == pytest.approx([(1.0, 0.3125), (1.4, 0.4), (3.0, 0.0)])
 
 
+def test_cloud_low_deck_keeps_ladders_above_the_layer_connected() -> None:
+    # Ladder bases can tower over the low-cloud layer top: fading at the
+    # layer regardless would paint a stranded dense sliver below the
+    # reported bases, so the skirt starts past the ladder's highest base
+    anchors = _cloud_low_deck(
+        bases=(np.nan, np.nan, 2.4, 2.9, np.nan), low=0.3, high=0.6, top=9.5
+    )
+    assert anchors == pytest.approx(
+        [(2.4, 0.5625), (2.9, 0.8125), (2.9, 0.8125), (4.5, 0.0)]
+    )
+
+
 def test_cloud_low_deck_without_a_ladder_holds_the_layer_top() -> None:
     # GFS runs ship no base ladder: a plain deck held to the model's
     # low-cloud layer top, melting into the sky above; no low cloud, no deck
